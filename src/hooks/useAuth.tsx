@@ -17,28 +17,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
-    // First check if we have a stored user - use it while API call is pending
     const storedUser = getStoredUser();
     if (storedUser) {
       setUser(storedUser);
     }
     
-    // If not authenticated, we're done
     if (!isAuthenticated()) {
       setUser(null);
       setLoading(false);
       return;
     }
     
-    // Try to refresh from API
     try {
       const data = await api.auth.me();
       if (data.user) {
         setUser(data.user);
         localStorage.setItem('nexus_user', JSON.stringify(data.user));
       }
-    } catch (err: any) {
-      // If API fails but we have stored user, keep them logged in
+    } catch {
       const storedUser = getStoredUser();
       if (storedUser) {
         setUser(storedUser);
@@ -56,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.auth.logout();
     } catch {
-      // Ignore logout errors
+      // Ignore
     } finally {
       setUser(null);
       localStorage.removeItem('nexus_access_token');
