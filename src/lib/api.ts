@@ -2,6 +2,7 @@ import { supabase, User, Conversation, Message, Job, Notification } from './supa
 import { mockUsers, mockConversations, mockMessages, mockJobs } from '@/data/mockData';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://nexus-chat-app-nexus-chat.hf.space';
+const HF_TOKEN = import.meta.env.VITE_HF_TOKEN || '';
 const USE_MOCK = false;
 
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -11,7 +12,8 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}` } : {}),
+      ...(token && !HF_TOKEN ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   });
