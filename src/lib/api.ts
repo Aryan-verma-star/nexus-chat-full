@@ -12,8 +12,7 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(HF_TOKEN ? { Authorization: `Bearer ${HF_TOKEN}` } : {}),
-      ...(token && !HF_TOKEN ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   });
