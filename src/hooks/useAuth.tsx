@@ -7,6 +7,7 @@ interface AuthContextType {
   loading: boolean;
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,41 +17,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshUser = async () => {
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      setUser(storedUser);
+    }
+    
+    if (!isAuthenticated()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+    
     try {
-      if (isAuthenticated()) {
-        const data = await api.auth.me();
+      const data = await api.auth.me();
+      if (data.user) {
         setUser(data.user);
         localStorage.setItem('nexus_user', JSON.stringify(data.user));
-      } else {
-        setUser(null);
       }
     } catch {
-      setUser(null);
-      localStorage.removeItem('nexus_access_token');
-      localStorage.removeItem('nexus_user');
+      const storedUser = getStoredUser();
+      if (storedUser) {
+        setUser(storedUser);
+      } else {
+        setUser(null);
+        localStorage.removeItem('nexus_access_token');
+        localStorage.removeItem('nexus_user');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
     try {
       await api.auth.logout();
+    } catch {
+      // Ignore
     } finally {
       setUser(null);
+      localStorage.removeItem('nexus_access_token');
+      localStorage.removeItem('nexus_refresh_token');
+      localStorage.removeItem('nexus_user');
+    }
+  };
+
+  const setUserDirect = (newUser: User | null) => {
+    setUser(newUser);
+    if (newUser) {
+      localStorage.setItem('nexus_user', JSON.stringify(newUser));
     }
   };
 
   useEffect(() => {
-    const initAuth = async () => {
-      if (isAuthenticated()) {
-        await refreshUser();
-      }
-      setLoading(false);
-    };
-    initAuth();
+    refreshUser();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, refreshUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, refreshUser, logout, setUser: setUserDirect }}>
       {children}
     </AuthContext.Provider>
   );
