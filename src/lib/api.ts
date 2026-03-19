@@ -1,8 +1,8 @@
 import { supabase, User, Conversation, Message, Job, Notification } from './supabase';
 import { mockUsers, mockConversations, mockMessages, mockJobs } from '@/data/mockData';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
-const USE_MOCK = !API_URL;
+const API_URL = import.meta.env.VITE_API_URL || 'https://nexus-chat-app-nexus-chat.hf.space';
+const USE_MOCK = false;
 
 async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('nexus_access_token');
