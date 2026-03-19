@@ -7,6 +7,7 @@ interface AuthContextType {
   loading: boolean;
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,6 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setUserDirect = (newUser: User | null) => {
+    setUser(newUser);
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       if (isAuthenticated()) {
@@ -50,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, refreshUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, refreshUser, logout, setUser: setUserDirect }}>
       {children}
     </AuthContext.Provider>
   );

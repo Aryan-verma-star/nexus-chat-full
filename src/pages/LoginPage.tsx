@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
-import { api, isAuthenticated } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
@@ -10,6 +11,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { setUser: setAuthUser } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,10 +23,16 @@ const LoginPage = () => {
     setError("");
 
     try {
-      await api.auth.login(username, password);
-      navigate("/chat");
+      const response = await api.auth.login(username, password);
+      if (response.success && response.data?.user) {
+        setAuthUser(response.data.user);
+        navigate("/chat");
+      } else {
+        setError("Login failed. Please check your credentials.");
+      }
     } catch (err: any) {
       setError(err.message || "Login failed. Please check your credentials.");
+    } finally {
       setLoading(false);
     }
   };
