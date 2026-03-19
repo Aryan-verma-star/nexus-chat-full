@@ -1,7 +1,7 @@
 import { supabase, User, Conversation, Message, Job, Notification } from './supabase';
 import { mockUsers, mockConversations, mockMessages, mockJobs } from '@/data/mockData';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://nexus-chat-app-nexus-chat.hf.space';
+const API_URL = 'https://Nexus-chat-app-nexus-chat.hf.space';
 const HF_TOKEN = import.meta.env.VITE_HF_TOKEN || '';
 const USE_MOCK = false;
 
