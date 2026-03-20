@@ -67,7 +67,10 @@ const TopBar = ({ notificationCount = 0, user, activeConversation, onBack }: Top
   const isChat = !!activeConversation;
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 bg-card border-b border-border px-4 safe-top">
+    <header
+      className="fixed left-0 right-0 top-0 z-50 bg-card border-b border-border"
+      style={{ paddingLeft: 16, paddingRight: 16, paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       {/* Inner flex container — centered content with breathing room */}
       <div className="flex items-center justify-between" style={{ height: 56 }}>
         {/* Left section */}
