@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import { themeMeta, applyTheme, getSavedTheme, saveTheme, getThemeHex, type ThemeName } from "@/lib/themes";
+import { UserManagementModal } from "@/components/settings/UserManagementModal";
 
 const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
   <div
@@ -32,6 +33,7 @@ export default function SettingsTab() {
   const [originalStatus, setOriginalStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [showUserManagement, setShowUserManagement] = useState(false);
 
   const [notifPrefs, setNotifPrefs] = useState(() => {
     try {
@@ -457,7 +459,7 @@ export default function SettingsTab() {
               Admin Panel
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button style={btnOutline} onClick={() => showToast("User management coming soon", "info")}>Manage Users →</button>
+              <button style={btnOutline} onClick={() => setShowUserManagement(true)}>Manage Users →</button>
               <button style={btnOutline} onClick={() => showToast("Integrations coming soon", "info")}>Integrations →</button>
               <button style={btnOutline} onClick={() => showToast("Logs coming soon", "info")}>View Logs →</button>
               {showTerminalBtn && (
@@ -552,6 +554,8 @@ export default function SettingsTab() {
       )}
 
       <style>{"@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }"}</style>
+
+      <UserManagementModal open={showUserManagement} onClose={() => setShowUserManagement(false)} />
     </div>
   );
 }
