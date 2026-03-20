@@ -24,18 +24,19 @@ const BottomNav = ({ activeTab, onTabChange, unreadChats = 0, newJobs = 0 }: Bot
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-border bg-background pb-safe md:hidden">
+    <nav className="flex items-center justify-around bg-card border-t border-border" style={{ height: 64 }}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         const badge = getBadge(tab.id);
         return (
-            <button
+          <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className="relative flex flex-col items-center gap-0.5 px-4 py-2 transition-transform active:scale-90"
+            className="relative flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors active:scale-90"
+            style={{ WebkitTapHighlightColor: "transparent" }}
           >
             {isActive && (
-              <span className="absolute -top-1 h-1 w-1 rounded-full bg-primary pulse-dot" />
+              <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />
             )}
             <div className="relative">
               <tab.icon className={`h-5 w-5 transition-colors duration-200 ${isActive ? "text-primary" : "text-muted-foreground"}`} />

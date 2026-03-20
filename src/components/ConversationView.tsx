@@ -98,6 +98,8 @@ export default function ConversationView() {
     );
   }
 
+  const currentUserId = user?.id || "";
+
   const getConvName = () => {
     if (activeConversation.type === 'group') {
       return activeConversation.name || 'Unnamed Group';
@@ -135,6 +137,15 @@ export default function ConversationView() {
   const convAvatarUrl = getConvAvatarUrl();
   const convInitial = convName[0]?.toUpperCase() || '?';
 
+  const isOtherOnline = () => {
+    if (activeConversation.type !== 'direct') return false;
+    const other = activeConversation.members?.find(m => {
+      const mid = m.user_id || (m.profile as any)?.id;
+      return mid !== user?.id;
+    });
+    return other?.profile?.is_online || false;
+  };
+
   const typingNames = getTypingNames(typingUsers, users);
 
   return (
@@ -157,7 +168,7 @@ export default function ConversationView() {
               <span className="text-foreground font-bold text-sm">{convInitial}</span>
             )}
           </div>
-          {activeConversation.type === 'direct' && getConvSubtitle() === 'Online' && (
+          {activeConversation.type === 'direct' && isOtherOnline() && (
             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-green-500" />
           )}
         </div>
@@ -174,7 +185,7 @@ export default function ConversationView() {
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-1 pb-28"
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-1"
       >
         {messagesLoading && messages.length === 0 && (
           <div className="flex items-center justify-center py-12">
@@ -303,8 +314,8 @@ export default function ConversationView() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border safe-bottom z-30">
+      {/* Input bar — flex item at bottom of flex container */}
+      <div className="flex-shrink-0 bg-card border-t border-border">
         <div className="flex items-end gap-2 p-2 max-w-screen-lg mx-auto">
           <button
             onClick={() => fileInputRef.current?.click()}
