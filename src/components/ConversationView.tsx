@@ -35,14 +35,44 @@ export default function ConversationView() {
   } = useChat();
 
   const [input, setInput] = useState("");
+  const [showEmoji, setShowEmoji] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (emojiRef.current && !(emojiRef.current as any).contains(e.target)) {
+        setShowEmoji(false);
+      }
+    };
+    if (showEmoji) {
+      document.addEventListener("click", handleClick);
+    }
+    return () => document.removeEventListener("click", handleClick);
+  }, [showEmoji]);
+
+  const insertEmoji = (emoji: string) => {
+    const ref = inputRef.current;
+    if (!ref) return;
+    const start = ref.selectionStart ?? input.length;
+    const end = ref.selectionEnd ?? input.length;
+    const newInput = input.slice(0, start) + emoji + input.slice(end);
+    setInput(newInput);
+    setShowEmoji(false);
+    setTimeout(() => {
+      ref.focus();
+      ref.setSelectionRange(start + emoji.length, start + emoji.length);
+    }, 0);
+  };
+
+  const quickEmojis = ["😀", "😂", "😍", "🥰", "👍", "❤️", "🔥", "🎉", "✅", "💯", "👏", "🤔", "😅", "😊", "😎", "🤝"];
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -342,9 +372,32 @@ export default function ConversationView() {
               className="w-full resize-none rounded-2xl border border-border bg-muted px-4 py-2.5 pr-10 font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
               style={{ minHeight: '40px', maxHeight: '120px' }}
             />
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+              onClick={(e) => { e.stopPropagation(); setShowEmoji(!showEmoji); }}
+            >
               <Smile className="h-4 w-4" />
             </button>
+
+            {showEmoji && (
+              <div
+                ref={emojiRef}
+                className="absolute bottom-full right-0 mb-2 bg-card border border-border rounded-2xl shadow-lg p-3 z-50"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="grid grid-cols-4 gap-1" style={{ minWidth: 200 }}>
+                  {quickEmojis.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => insertEmoji(emoji)}
+                      className="w-9 h-9 flex items-center justify-center text-lg rounded-lg hover:bg-muted transition-colors active:scale-90"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {input.trim() ? (
