@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Terminal,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
