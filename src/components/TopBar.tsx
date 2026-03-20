@@ -67,67 +67,104 @@ const TopBar = ({ notificationCount = 0, user, activeConversation, onBack }: Top
   const isChat = !!activeConversation;
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center border-b border-border bg-card px-4 safe-top">
-      {/* Left section */}
-      <div className="flex items-center gap-2" style={{ flexShrink: isChat ? 1 : 0 }}>
-        {isChat && onBack && (
-          <button
-            onClick={onBack}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors active:scale-90 md:hidden"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-        )}
-        {isChat ? (
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 px-2 py-1 min-w-0 md:hidden"
-          >
-            <div className="relative flex-shrink-0">
-              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                {convAvatarUrl ? (
-                  <img src={convAvatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-foreground font-bold text-xs">{(convName || "?")[0]?.toUpperCase()}</span>
+    <header
+      className="fixed left-0 right-0 top-0 z-50 bg-card border-b border-border safe-top"
+      style={{ paddingTop: 0, paddingBottom: 0, paddingLeft: "1rem", paddingRight: "1rem" }}
+    >
+      {/* Inner flex container — always 56px tall, centered content */}
+      <div className="flex items-center justify-between" style={{ height: 56 }}>
+        {/* Left section */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isChat && onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors active:scale-90 md:hidden"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+
+          {isChat ? (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 min-w-0 md:hidden"
+            >
+              <div className="flex-shrink-0">
+                <div
+                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center overflow-hidden"
+                  style={{ lineHeight: 1 }}
+                >
+                  {convAvatarUrl ? (
+                    <img src={convAvatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span
+                      className="text-foreground font-bold text-sm"
+                      style={{ lineHeight: 1 }}
+                    >
+                      {(convName || "?")[0]?.toUpperCase()}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="text-foreground font-semibold text-[15px] truncate max-w-[150px] leading-tight">
+                  {convName}
+                </p>
+                {convSubtitle && (
+                  <p className="text-muted-foreground text-[11px] leading-tight">{convSubtitle}</p>
                 )}
               </div>
-            </div>
-            <div className="min-w-0">
-              <p className="text-foreground font-semibold text-sm truncate max-w-[140px]">{convName}</p>
-              {convSubtitle && (
-                <p className="text-muted-foreground text-[11px]">{convSubtitle}</p>
-              )}
-            </div>
-          </button>
-        ) : (
-            <div className="flex items-center gap-1 flex-shrink-0 overflow-hidden">
-              <span className="font-display text-base font-bold text-primary tracking-wide">NEXUS</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-primary pulse-dot" />
-            </div>
-        )}
-      </div>
-
-      {/* Right section */}
-      <div className="flex items-center gap-1 ml-auto">
-        {!isChat && (
-          <button className="relative p-2 transition-transform active:scale-95">
-            <Bell className="h-5 w-5 text-foreground" />
-            {notificationCount > 0 && (
-              <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent px-1 font-display text-[9px] text-accent-foreground">
-                {notificationCount > 99 ? "99+" : notificationCount}
-              </span>
-            )}
-          </button>
-        )}
-        <button onClick={handleLogout} className="p-2 transition-transform active:scale-95" title="Logout">
-          <LogOut className="h-5 w-5 text-muted-foreground hover:text-foreground" />
-        </button>
-        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center font-display text-xs text-primary ml-1">
-          {user?.avatar_url ? (
-            <img src={user.avatar_url} alt={displayName} className="h-full w-full rounded-full object-cover" />
+            </button>
           ) : (
-            initial
+            <div className="flex items-center gap-1.5" style={{ lineHeight: 1 }}>
+              <span
+                className="font-display text-[17px] font-bold text-primary tracking-[0.15em] leading-none"
+                style={{ lineHeight: 1 }}
+              >
+                NEXUS
+              </span>
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-primary pulse-dot flex-shrink-0"
+                style={{ marginTop: 2 }}
+              />
+            </div>
           )}
+        </div>
+
+        {/* Right section */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {!isChat && (
+            <button className="relative p-2 -mr-2 transition-transform active:scale-95">
+              <Bell className="h-5 w-5 text-foreground" />
+              {notificationCount > 0 && (
+                <span className="absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent px-1 font-display text-[9px] text-accent-foreground">
+                  {notificationCount > 99 ? "99+" : notificationCount}
+                </span>
+              )}
+            </button>
+          )}
+          <button
+            onClick={handleLogout}
+            className="p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors active:scale-95"
+            title="Logout"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+          <div
+            className="rounded-full bg-muted flex items-center justify-center text-primary font-display text-xs flex-shrink-0 ml-1"
+            style={{ width: 36, height: 36, lineHeight: 1, fontSize: 13 }}
+          >
+            {user?.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={displayName}
+                className="rounded-full object-cover"
+                style={{ width: 36, height: 36 }}
+              />
+            ) : (
+              <span style={{ lineHeight: 1 }}>{initial}</span>
+            )}
+          </div>
         </div>
       </div>
     </header>
