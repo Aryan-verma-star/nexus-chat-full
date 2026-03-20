@@ -67,7 +67,7 @@ const TopBar = ({ notificationCount = 0, user, activeConversation, onBack }: Top
   const isChat = !!activeConversation;
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center border-b border-border bg-card safe-top">
+    <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center border-b border-border bg-card px-4 safe-top">
       {/* Left section */}
       <div className="flex items-center gap-2 min-w-0 flex-shrink-0" style={{ width: isChat ? "auto" : undefined }}>
         {isChat && onBack && (
@@ -101,7 +101,7 @@ const TopBar = ({ notificationCount = 0, user, activeConversation, onBack }: Top
           </button>
         ) : (
             <div className="flex items-center gap-1">
-              <span className="font-display text-base font-bold text-primary">NEXUS</span>
+              <span className="font-display text-base font-bold text-primary tracking-wide">NEXUS</span>
             <span className="h-1.5 w-1.5 rounded-full bg-primary pulse-dot" />
           </div>
         )}
