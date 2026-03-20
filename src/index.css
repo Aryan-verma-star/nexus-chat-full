@@ -52,6 +52,16 @@
     --glow-green-strong: 0 0 30px rgba(0, 255, 136, 0.5);
     --gradient-sent: linear-gradient(135deg, #00ff88 0%, #0ea5e9 100%);
 
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-tertiary: #1a1a2e;
+    --accent-primary: #00ff88;
+    --accent-secondary: #0ea5e9;
+    --text-primary: #e0e0e0;
+    --text-secondary: #888899;
+    --font-size-base: 14px;
+    --transition-speed: 200ms;
+
     font-family: 'Inter', system-ui, sans-serif;
   }
 }
@@ -65,6 +75,14 @@
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-size: var(--font-size-base);
+  }
+
+  body.reduce-motion *,
+  body.reduce-motion *::before,
+  body.reduce-motion *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
   }
 
   /* Custom scrollbar */

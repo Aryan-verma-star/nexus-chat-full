@@ -8,6 +8,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
+  updateUser: (updatedUser: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,12 +69,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateUser = (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem('nexus_user', JSON.stringify(updatedUser));
+  };
+
   useEffect(() => {
     refreshUser();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, refreshUser, logout, setUser: setUserDirect }}>
+    <AuthContext.Provider value={{ user, loading, refreshUser, logout, setUser: setUserDirect, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
