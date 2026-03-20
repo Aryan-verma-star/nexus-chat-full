@@ -64,7 +64,11 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col bg-background overflow-hidden" style={{ height: "100dvh" }}>
-      <TopBar user={user} />
+      <TopBar
+        user={user}
+        activeConversation={activeConversation}
+        onBack={() => setActiveConversation && setActiveConversation(null)}
+      />
 
       {/* ======== DESKTOP: Side-by-side layout ======== */}
       <div className="hidden md:flex flex-1 overflow-hidden">
