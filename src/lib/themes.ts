@@ -1,65 +1,92 @@
-export const themes: Record<string, Record<string, string>> = {
+// src/lib/themes.ts
+// Minimal theme utility — CSS does the heavy lifting
+
+export const themeNames = ['cyber', 'midnight', 'phantom'] as const;
+export type ThemeName = typeof themeNames[number];
+
+export interface ThemeMeta {
+  name: ThemeName;
+  label: string;
+  previewAccent: string;
+  previewBg: string;
+}
+
+export const themeMeta: Record<ThemeName, ThemeMeta> = {
   cyber: {
-    '--bg-primary': '#0a0a0f',
-    '--bg-secondary': '#12121a',
-    '--bg-tertiary': '#1a1a2e',
-    '--accent-primary': '#00ff88',
-    '--accent-secondary': '#0ea5e9',
-    '--accent-tertiary': '#8b5cf6',
-    '--text-primary': '#e0e0e0',
-    '--text-secondary': '#888899',
-    '--danger': '#ff3366',
-    '--border-glow': 'rgba(0, 255, 136, 0.1)',
+    name: 'cyber',
+    label: 'Cyber',
+    previewAccent: '#00ff88',
+    previewBg: '#0a0a0f',
   },
   midnight: {
-    '--bg-primary': '#0d1117',
-    '--bg-secondary': '#161b22',
-    '--bg-tertiary': '#21262d',
-    '--accent-primary': '#58a6ff',
-    '--accent-secondary': '#3fb950',
-    '--accent-tertiary': '#bc8cff',
-    '--text-primary': '#c9d1d9',
-    '--text-secondary': '#8b949e',
-    '--danger': '#f85149',
-    '--border-glow': 'rgba(88, 166, 255, 0.1)',
+    name: 'midnight',
+    label: 'Midnight',
+    previewAccent: '#58a6ff',
+    previewBg: '#0d1117',
   },
   phantom: {
-    '--bg-primary': '#13111c',
-    '--bg-secondary': '#1a1730',
-    '--bg-tertiary': '#241f3d',
-    '--accent-primary': '#a78bfa',
-    '--accent-secondary': '#f472b6',
-    '--accent-tertiary': '#67e8f9',
-    '--text-primary': '#e2e0ea',
-    '--text-secondary': '#9390a3',
-    '--danger': '#fb7185',
-    '--border-glow': 'rgba(167, 139, 250, 0.1)',
+    name: 'phantom',
+    label: 'Phantom',
+    previewAccent: '#a78bfa',
+    previewBg: '#13111c',
   },
 };
 
-export function applyThemeToDOM(themeName: string) {
-  const t = themes[themeName];
-  if (!t) return;
-  Object.entries(t).forEach(([key, value]) => {
-    document.documentElement.style.setProperty(key, value);
-  });
-  document.body.style.backgroundColor = t['--bg-primary'];
-  document.body.style.color = t['--text-primary'];
+/**
+ * Apply theme — just sets a data attribute on <html>
+ * CSS in index.css handles the actual variable overrides
+ */
+export function applyTheme(name: ThemeName): void {
+  console.log('[NEXUS THEME] Applying theme:', name);
+
+  document.documentElement.setAttribute('data-theme', name);
+
+  document.documentElement.style.removeProperty('background-color');
+  document.documentElement.style.removeProperty('color');
+  document.body.style.removeProperty('background-color');
+  document.body.style.removeProperty('color');
+  document.body.style.removeProperty('background');
+
+  const oldStyle = document.getElementById('nexus-theme-override') ||
+                   document.getElementById('nexus-theme-vars');
+  if (oldStyle) oldStyle.remove();
+
+  console.log('[NEXUS THEME] data-theme is now:', document.documentElement.getAttribute('data-theme'));
+  console.log('[NEXUS THEME] Computed --background:', getComputedStyle(document.documentElement).getPropertyValue('--background'));
 }
 
-export function getSavedTheme(): string {
+export function getSavedTheme(): ThemeName {
   try {
-    const prefs = JSON.parse(localStorage.getItem('nexus_appearance_prefs') || '{}');
-    return prefs.theme || 'cyber';
-  } catch {
-    return 'cyber';
-  }
-}
-
-export function saveTheme(themeName: string) {
-  try {
-    const prefs = JSON.parse(localStorage.getItem('nexus_appearance_prefs') || '{}');
-    prefs.theme = themeName;
-    localStorage.setItem('nexus_appearance_prefs', JSON.stringify(prefs));
+    const stored = localStorage.getItem('nexus_theme');
+    if (stored && themeNames.includes(stored as ThemeName)) {
+      return stored as ThemeName;
+    }
+    const oldStored = localStorage.getItem('nexus_appearance_prefs');
+    if (oldStored) {
+      const parsed = JSON.parse(oldStored);
+      if (parsed.theme && themeNames.includes(parsed.theme as ThemeName)) {
+        return parsed.theme as ThemeName;
+      }
+    }
   } catch {}
+  return 'cyber';
+}
+
+export function saveTheme(name: ThemeName): void {
+  try {
+    localStorage.setItem('nexus_theme', name);
+    console.log('[NEXUS THEME] Saved to localStorage:', name);
+  } catch {}
+}
+
+/**
+ * Hex colors for inline styles in SettingsTab
+ */
+export function getThemeHex(name: ThemeName) {
+  const colors: Record<ThemeName, { bg: string; fg: string; accent: string; muted: string; card: string; danger: string }> = {
+    cyber:    { bg: '#0a0a0f', fg: '#e0e0e0', accent: '#00ff88', muted: '#888899', card: '#12121a', danger: '#ff3366' },
+    midnight: { bg: '#0d1117', fg: '#c9d1d9', accent: '#58a6ff', muted: '#8b949e', card: '#161b22', danger: '#f85149' },
+    phantom:  { bg: '#13111c', fg: '#e2e0ea', accent: '#a78bfa', muted: '#9390a3', card: '#1a1730', danger: '#fb7185' },
+  };
+  return colors[name];
 }
