@@ -1,45 +1,31 @@
-import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { useState } from "react";
+import { Loader2, Search } from "lucide-react";
+import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
-import { User } from "@/lib/supabase";
 
-interface PeopleTabProps {
-  onSelectUser: (userId: string) => void;
-}
+const formatLastSeen = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (minutes < 1) return "Active now";
+  if (minutes < 60) return `Active ${minutes}m ago`;
+  if (hours < 24) return `Active ${hours}h ago`;
+  if (days < 7) return `Active ${days}d ago`;
+  return `Last seen ${date.toLocaleDateString()}`;
+};
 
-const PeopleTab = ({ onSelectUser }: PeopleTabProps) => {
+export default function PeopleTab() {
   const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { users, openDirectMessage, loading } = useChat();
+  const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        const data = await api.users.list();
-        setUsers(data);
-      } catch (err) {
-        console.error("Failed to load users:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadUsers();
-  }, []);
-
-  const formatLastSeen = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    if (minutes < 1) return "Active now";
-    if (minutes < 60) return `Active ${minutes}m ago`;
-    if (hours < 24) return `Active ${hours}h ago`;
-    if (days < 7) return `Active ${days}d ago`;
-    return `Last seen ${date.toLocaleDateString()}`;
-  };
+  const filtered = users.filter(u => {
+    const name = (u.display_name || u.username || "").toLowerCase();
+    return name.includes(search.toLowerCase());
+  });
 
   if (loading) {
     return (
@@ -57,11 +43,24 @@ const PeopleTab = ({ onSelectUser }: PeopleTabProps) => {
         </h2>
       </div>
 
+      <div className="px-4 pb-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search members..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-border bg-background py-2.5 pl-10 pr-4 font-body text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all focus:border-primary"
+          />
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto">
-        {users.map((user) => (
+        {filtered.map((user) => (
           <button
             key={user.id}
-            onClick={() => onSelectUser(user.id)}
+            onClick={() => openDirectMessage(user.id)}
             className="flex w-full items-center gap-3 px-4 py-3 text-left transition-all duration-200 hover:bg-muted/30 active:scale-[0.99]"
           >
             <div className="relative flex-shrink-0">
@@ -97,6 +96,4 @@ const PeopleTab = ({ onSelectUser }: PeopleTabProps) => {
       </div>
     </div>
   );
-};
-
-export default PeopleTab;
+}
