@@ -93,6 +93,13 @@ export default function PeopleTab() {
             </div>
           </button>
         ))}
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full px-8 py-20">
+            <div className="text-4xl mb-4">👥</div>
+            <p className="text-foreground font-semibold">No team members yet</p>
+            <p className="text-muted-foreground text-sm text-center">Ask your admin to add members</p>
+          </div>
+        )}
       </div>
     </div>
   );

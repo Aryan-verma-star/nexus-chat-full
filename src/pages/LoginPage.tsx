@@ -38,7 +38,7 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background scan-lines">
+    <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-background scan-lines">
       {/* Grid background */}
       <div className="grid-bg absolute inset-0" />
       

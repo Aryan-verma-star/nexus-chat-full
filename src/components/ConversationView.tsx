@@ -147,7 +147,7 @@ export default function ConversationView() {
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-1"
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-1 pb-28"
       >
         {messagesLoading && messages.length === 0 && (
           <div className="flex items-center justify-center py-12">
@@ -277,11 +277,11 @@ export default function ConversationView() {
       </div>
 
       {/* Input bar */}
-      <div className="border-t border-border bg-card px-3 py-2.5">
-        <div className="flex items-end gap-2">
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border safe-bottom z-30">
+        <div className="flex items-end gap-2 p-2 max-w-screen-lg mx-auto">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors active:scale-95 flex-shrink-0"
+            className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground transition-colors active:scale-90"
           >
             <Paperclip className="h-5 w-5" />
           </button>
@@ -299,23 +299,29 @@ export default function ConversationView() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
+              placeholder="Message..."
               rows={1}
-              className="w-full resize-none rounded-xl border border-border bg-background px-4 py-2.5 pr-10 font-body text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all duration-200 focus:border-primary"
-              style={{ maxHeight: 120 }}
+              className="w-full resize-none rounded-2xl border border-border bg-muted px-4 py-2.5 pr-10 font-body text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              style={{ minHeight: '40px', maxHeight: '120px' }}
             />
             <button className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
               <Smile className="h-4 w-4" />
             </button>
           </div>
 
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || sendingMessage}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-sent text-primary-foreground transition-all duration-200 disabled:opacity-30 active:scale-95"
-          >
-            {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
+          {input.trim() ? (
+            <button
+              onClick={handleSend}
+              disabled={sendingMessage}
+              className="flex-shrink-0 w-10 h-10 rounded-full bg-primary flex items-center justify-center active:scale-90 transition-transform disabled:opacity-50"
+            >
+              {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                <svg className="w-5 h-5 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              )}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

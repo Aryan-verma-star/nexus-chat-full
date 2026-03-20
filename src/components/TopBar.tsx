@@ -23,7 +23,7 @@ const TopBar = ({ notificationCount = 0, user }: TopBarProps) => {
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-background px-4">
+    <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-background px-4 safe-top">
       <div className="flex items-center gap-1">
         <span className="font-display text-base font-bold text-primary">NEXUS</span>
         <span className="h-1.5 w-1.5 rounded-full bg-primary pulse-dot" />
