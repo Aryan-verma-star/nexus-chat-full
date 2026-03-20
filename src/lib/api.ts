@@ -55,6 +55,25 @@ export const api = {
       return data;
     },
 
+    register: async (username: string, displayName: string, password: string, email?: string) => {
+      const data = await fetchApi<{
+        success: boolean;
+        data: { user: User; session: { access_token: string; refresh_token: string; expires_at: number } };
+        error: string | null;
+      }>('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, display_name: displayName, password, email }),
+      });
+
+      if (data.success && data.data.session) {
+        localStorage.setItem('nexus_access_token', data.data.session.access_token);
+        localStorage.setItem('nexus_refresh_token', data.data.session.refresh_token);
+        localStorage.setItem('nexus_user', JSON.stringify(data.data.user));
+      }
+
+      return data;
+    },
+
     logout: async () => {
       await fetchApi('/api/auth/logout', { method: 'POST' });
       localStorage.removeItem('nexus_access_token');

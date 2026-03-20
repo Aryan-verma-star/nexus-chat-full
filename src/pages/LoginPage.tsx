@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { User, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -106,9 +106,17 @@ const LoginPage = () => {
           </form>
         </div>
 
-        <p className="mt-6 text-center font-body text-xs text-muted-foreground">
-          Access restricted. Contact admin for credentials.
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <p className="font-body text-xs text-muted-foreground">
+            Access restricted. Contact admin for credentials.
+          </p>
+          <p className="font-body text-xs text-muted-foreground">
+            New here?{" "}
+            <Link to="/register" className="text-primary underline hover:text-primary/80">
+              Create an account
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
