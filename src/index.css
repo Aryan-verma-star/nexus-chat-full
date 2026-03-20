@@ -57,8 +57,11 @@
     --bg-tertiary: #1a1a2e;
     --accent-primary: #00ff88;
     --accent-secondary: #0ea5e9;
+    --accent-tertiary: #8b5cf6;
     --text-primary: #e0e0e0;
     --text-secondary: #888899;
+    --danger: #ff3366;
+    --border-glow: rgba(0, 255, 136, 0.1);
     --font-size-base: 14px;
     --transition-speed: 200ms;
 

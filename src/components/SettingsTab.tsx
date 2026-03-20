@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
+import { themes, applyThemeToDOM, getSavedTheme, saveTheme } from "@/lib/themes";
 
 const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
   const toast = document.createElement("div");
@@ -20,17 +21,11 @@ const showToast = (message: string, type: "success" | "error" | "info" = "info")
   }, 3000);
 };
 
-const THEMES: Record<string, Record<string, string>> = {
-  cyber: { "--bg-primary": "#0a0a0f", "--bg-secondary": "#12121a", "--accent-primary": "#00ff88", "--accent-secondary": "#0ea5e9" },
-  midnight: { "--bg-primary": "#0d1117", "--bg-secondary": "#161b22", "--accent-primary": "#58a6ff", "--accent-secondary": "#3fb950" },
-  phantom: { "--bg-primary": "#13111c", "--bg-secondary": "#1a1730", "--accent-primary": "#a78bfa", "--accent-secondary": "#f472b6" },
-};
-
 const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
   <div
     onClick={() => onChange(!checked)}
     style={{
-      width: 48, height: 28, borderRadius: 14, background: checked ? "#00ff88" : "#333",
+      width: 48, height: 28, borderRadius: 14, background: checked ? "var(--accent-primary)" : "#333",
       cursor: "pointer", position: "relative", transition: "background 0.2s",
     }}
   >
@@ -41,6 +36,63 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean
     }} />
   </div>
 );
+
+const HSL_THEMES: Record<string, Record<string, string>> = {
+  cyber: {
+    "--background": "240 33% 4%",
+    "--foreground": "240 7% 88%",
+    "--primary": "153 100% 50%",
+    "--primary-foreground": "240 33% 4%",
+    "--secondary": "199 89% 48%",
+    "--muted": "240 15% 15%",
+    "--muted-foreground": "240 10% 55%",
+    "--accent": "258 89% 66%",
+    "--card": "240 22% 10%",
+    "--card-foreground": "240 7% 88%",
+    "--destructive": "344 100% 60%",
+  },
+  midnight: {
+    "--background": "214 27% 8%",
+    "--foreground": "214 9% 80%",
+    "--primary": "212 100% 67%",
+    "--primary-foreground": "214 27% 8%",
+    "--secondary": "142 71% 45%",
+    "--muted": "215 16% 14%",
+    "--muted-foreground": "215 14% 55%",
+    "--accent": "263 70% 71%",
+    "--card": "214 20% 11%",
+    "--card-foreground": "214 9% 80%",
+    "--destructive": "0 72% 65%",
+  },
+  phantom: {
+    "--background": "261 28% 7%",
+    "--foreground": "252 17% 92%",
+    "--primary": "263 70% 71%",
+    "--primary-foreground": "261 28% 7%",
+    "--secondary": "331 77% 65%",
+    "--muted": "261 22% 17%",
+    "--muted-foreground": "252 11% 63%",
+    "--accent": "186 85% 60%",
+    "--card": "261 22% 13%",
+    "--card-foreground": "252 17% 92%",
+    "--destructive": "350 89% 70%",
+  },
+};
+
+const applyFullTheme = (themeName: string) => {
+  const t = themes[themeName];
+  const h = HSL_THEMES[themeName];
+  if (!t || !h) return;
+
+  Object.entries(t).forEach(([key, value]) => {
+    document.documentElement.style.setProperty(key, value);
+  });
+  Object.entries(h).forEach(([key, value]) => {
+    document.documentElement.style.setProperty(key, value);
+  });
+  document.body.style.backgroundColor = t["--bg-primary"];
+  document.body.style.color = t["--text-primary"];
+};
 
 export default function SettingsTab() {
   const auth = useAuth();
@@ -62,12 +114,7 @@ export default function SettingsTab() {
     } catch { return { push: false, messages: true, jobs: true, sound: true, vibration: false }; }
   });
 
-  const [activeTheme, setActiveTheme] = useState(() => {
-    try {
-      const stored = localStorage.getItem("nexus_appearance_prefs");
-      return stored ? JSON.parse(stored).theme || "cyber" : "cyber";
-    } catch { return "cyber"; }
-  });
+  const [activeTheme, setActiveTheme] = useState(getSavedTheme);
   const [fontSize, setFontSize] = useState(() => {
     try {
       const stored = localStorage.getItem("nexus_appearance_prefs");
@@ -75,11 +122,7 @@ export default function SettingsTab() {
     } catch { return "medium"; }
   });
 
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const [tapCount, setTapCount] = useState(0);
   const [lastTap, setLastTap] = useState(0);
@@ -101,13 +144,13 @@ export default function SettingsTab() {
       setOriginalDisplayName(user.display_name || "");
       setOriginalStatus(user.custom_status || "");
     }
-    applyTheme(activeTheme);
+    applyFullTheme(activeTheme);
     applyFontSize(fontSize);
   }, [user, activeTheme, fontSize]);
 
   if (!user) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#888899", fontFamily: "Inter, sans-serif" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-secondary)", fontFamily: "Inter, sans-serif" }}>
         Loading settings...
       </div>
     );
@@ -116,20 +159,21 @@ export default function SettingsTab() {
   const isAdmin = user.role === "admin";
   const hasProfileChanges = displayName !== originalDisplayName || customStatus !== originalStatus;
 
-  const applyTheme = (name: string) => {
-    const t = THEMES[name];
-    if (t) Object.entries(t).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+  const handleThemeChange = (name: string) => {
+    applyFullTheme(name);
+    saveTheme(name);
     setActiveTheme(name);
-    const prefs = { theme: name, fontSize };
-    localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
   };
 
   const applyFontSize = (size: string) => {
     const map: Record<string, string> = { small: "13px", medium: "14px", large: "16px" };
     document.documentElement.style.setProperty("--font-size-base", map[size] || "14px");
     setFontSize(size);
-    const prefs = { theme: activeTheme, fontSize: size };
-    localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
+    try {
+      const prefs = JSON.parse(localStorage.getItem("nexus_appearance_prefs") || "{}");
+      prefs.fontSize = size;
+      localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
+    } catch {}
   };
 
   const handleSaveProfile = async () => {
@@ -185,21 +229,6 @@ export default function SettingsTab() {
     }
     updateNotifPref("push", enabled);
     showToast(enabled ? "Push notifications enabled" : "Push notifications disabled", "success");
-  };
-
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) { showToast("Passwords don't match", "error"); return; }
-    if (newPassword.length < 8) { showToast("Password must be at least 8 characters", "error"); return; }
-    setPasswordLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
-      showToast("Password updated", "success");
-      setShowPasswordModal(false);
-      setNewPassword(""); setConfirmPassword("");
-    } catch (err: any) {
-      showToast(err.message || "Failed to update password", "error");
-    } finally { setPasswordLoading(false); }
   };
 
   const handleLogout = async () => {
@@ -287,17 +316,17 @@ export default function SettingsTab() {
     } else if (e.key === "Escape") { setTerminalOpen(false); }
   };
 
-  const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
+  const getInitials = (name: string) => name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) || "?";
 
   const sectionStyle: React.CSSProperties = { marginBottom: 32, padding: "0 16px" };
-  const headerStyle: React.CSSProperties = { fontSize: 16, fontWeight: 700, color: "#e0e0e0", marginBottom: 16, display: "flex", alignItems: "center", gap: 8, fontFamily: "JetBrains Mono, monospace" };
-  const inputStyle: React.CSSProperties = { width: "100%", padding: "12px 16px", background: "#12121a", border: "1px solid rgba(0,255,136,0.15)", borderRadius: 12, color: "#e0e0e0", fontSize: 14, outline: "none", fontFamily: "Inter, sans-serif", boxSizing: "border-box" as const };
-  const btnPrimary: React.CSSProperties = { width: "100%", padding: "14px", background: "linear-gradient(135deg, #00ff88, #0ea5e9)", color: "#0a0a0f", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1, textTransform: "uppercase" as const };
-  const btnOutline: React.CSSProperties = { width: "100%", padding: "14px", background: "transparent", border: "1px solid rgba(0,255,136,0.3)", borderRadius: 12, color: "#00ff88", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+  const headerStyle: React.CSSProperties = { fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16, display: "flex", alignItems: "center", gap: 8, fontFamily: "JetBrains Mono, monospace" };
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "12px 16px", background: "var(--bg-secondary)", border: "1px solid var(--border-glow)", borderRadius: 12, color: "var(--text-primary)", fontSize: 14, outline: "none", fontFamily: "Inter, sans-serif", boxSizing: "border-box" as const };
+  const btnPrimary: React.CSSProperties = { width: "100%", padding: "14px", background: "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))", color: "var(--bg-primary)", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1, textTransform: "uppercase" as const };
+  const btnOutline: React.CSSProperties = { width: "100%", padding: "14px", background: "transparent", border: "1px solid var(--border-glow)", borderRadius: 12, color: "var(--accent-primary)", fontSize: 14, fontWeight: 600, cursor: "pointer" };
   const toggleRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" };
-  const divider: React.CSSProperties = { height: 1, background: "rgba(0,255,136,0.08)", margin: "24px 0" };
+  const divider: React.CSSProperties = { height: 1, background: "var(--border-glow)", margin: "24px 0" };
   const modalOverlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: 16 };
-  const modalBox: React.CSSProperties = { background: "#12121a", borderRadius: 16, padding: 24, maxWidth: 400, width: "100%", border: "1px solid rgba(0,255,136,0.1)" };
+  const modalBox: React.CSSProperties = { background: "var(--bg-secondary)", borderRadius: 16, padding: 24, maxWidth: 400, width: "100%", border: "1px solid var(--border-glow)" };
 
   return (
     <div style={{ height: "100%", overflowY: "auto", paddingTop: 16, paddingBottom: 100, fontFamily: "Inter, sans-serif" }}>
@@ -310,19 +339,19 @@ export default function SettingsTab() {
           <label style={{ cursor: "pointer", position: "relative" }}>
             <div style={{
               width: 80, height: 80, borderRadius: 40,
-              background: user.avatar_url ? `url(${user.avatar_url}) center/cover` : "linear-gradient(135deg, #00ff88, #0ea5e9)",
+              background: user.avatar_url ? `url(${user.avatar_url}) center/cover` : `linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 28, fontWeight: 700, color: "#0a0a0f", border: "2px solid rgba(0,255,136,0.3)",
+              fontSize: 28, fontWeight: 700, color: "var(--bg-primary)", border: "2px solid var(--border-glow)",
               fontFamily: "JetBrains Mono, monospace",
             }}>
               {!user.avatar_url && getInitials(user.display_name || user.username || "?")}
               {avatarLoading && (
-                <div style={{ position: "absolute", inset: 0, borderRadius: 40, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", color: "#00ff88" }}>
+                <div style={{ position: "absolute", inset: 0, borderRadius: 40, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent-primary)" }}>
                   ...
                 </div>
               )}
             </div>
-            <div style={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderRadius: 12, background: "#00ff88", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
+            <div style={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderRadius: 12, background: "var(--accent-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
               📷
             </div>
             <input type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: "none" }} />
@@ -330,20 +359,20 @@ export default function SettingsTab() {
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12, color: "#888899", marginBottom: 4, display: "block" }}>Display Name</label>
+          <label style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4, display: "block" }}>Display Name</label>
           <input style={inputStyle} value={displayName} onChange={e => setDisplayName(e.target.value.slice(0, 50))} placeholder="Your display name" />
-          <div style={{ fontSize: 11, color: "#888899", textAlign: "right", marginTop: 2 }}>{displayName.length}/50</div>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", textAlign: "right", marginTop: 2 }}>{displayName.length}/50</div>
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12, color: "#888899", marginBottom: 4, display: "block" }}>Username 🔒</label>
+          <label style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4, display: "block" }}>Username 🔒</label>
           <input style={{ ...inputStyle, opacity: 0.5, cursor: "not-allowed" }} value={user.username || ""} readOnly />
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, color: "#888899", marginBottom: 4, display: "block" }}>Status</label>
+          <label style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4, display: "block" }}>Status</label>
           <input style={inputStyle} value={customStatus} onChange={e => setCustomStatus(e.target.value.slice(0, 100))} placeholder="What's on your mind?" />
-          <div style={{ fontSize: 11, color: "#888899", textAlign: "right", marginTop: 2 }}>{customStatus.length}/100</div>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", textAlign: "right", marginTop: 2 }}>{customStatus.length}/100</div>
         </div>
 
         <button
@@ -359,11 +388,11 @@ export default function SettingsTab() {
       {/* NOTIFICATIONS */}
       <div style={sectionStyle}>
         <div style={headerStyle}>Notifications</div>
-        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Push Notifications</span><Toggle checked={notifPrefs.push} onChange={handlePushToggle} /></div>
-        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Message Notifications</span><Toggle checked={notifPrefs.messages} onChange={v => updateNotifPref("messages", v)} /></div>
-        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Job Notifications</span><Toggle checked={notifPrefs.jobs} onChange={v => updateNotifPref("jobs", v)} /></div>
-        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Sound</span><Toggle checked={notifPrefs.sound} onChange={v => { updateNotifPref("sound", v); if (v) { try { const c = new AudioContext(); const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 800; g.gain.value = 0.1; o.start(); o.stop(c.currentTime + 0.15); } catch {} } }} /></div>
-        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Vibration</span><Toggle checked={notifPrefs.vibration} onChange={v => { updateNotifPref("vibration", v); if (v && navigator.vibrate) navigator.vibrate(200); }} /></div>
+        <div style={toggleRow}><span style={{ color: "var(--text-primary)" }}>Push Notifications</span><Toggle checked={notifPrefs.push} onChange={handlePushToggle} /></div>
+        <div style={toggleRow}><span style={{ color: "var(--text-primary)" }}>Message Notifications</span><Toggle checked={notifPrefs.messages} onChange={v => updateNotifPref("messages", v)} /></div>
+        <div style={toggleRow}><span style={{ color: "var(--text-primary)" }}>Job Notifications</span><Toggle checked={notifPrefs.jobs} onChange={v => updateNotifPref("jobs", v)} /></div>
+        <div style={toggleRow}><span style={{ color: "var(--text-primary)" }}>Sound</span><Toggle checked={notifPrefs.sound} onChange={v => { updateNotifPref("sound", v); if (v) { try { const c = new AudioContext(); const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 800; g.gain.value = 0.1; o.start(); o.stop(c.currentTime + 0.15); } catch {} } }} /></div>
+        <div style={toggleRow}><span style={{ color: "var(--text-primary)" }}>Vibration</span><Toggle checked={notifPrefs.vibration} onChange={v => { updateNotifPref("vibration", v); if (v && navigator.vibrate) navigator.vibrate(200); }} /></div>
       </div>
 
       <div style={divider} />
@@ -372,45 +401,37 @@ export default function SettingsTab() {
       <div style={sectionStyle}>
         <div style={headerStyle}>Appearance</div>
 
-        <label style={{ fontSize: 12, color: "#888899", marginBottom: 8, display: "block" }}>Theme</label>
+        <label style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>Theme</label>
         <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-          {Object.entries(THEMES).map(([name, vars]) => (
-            <div key={name} onClick={() => applyTheme(name)} style={{
-              flex: 1, height: 60, borderRadius: 12, background: vars["--bg-primary"], border: `2px solid ${activeTheme === name ? vars["--accent-primary"] : "rgba(255,255,255,0.1)"}`,
+          {Object.entries(themes).map(([name, vars]) => (
+            <div key={name} onClick={() => handleThemeChange(name)} style={{
+              flex: 1, height: 60, borderRadius: 12, background: vars["--bg-primary"], border: `2px solid ${activeTheme === name ? vars["--accent-primary"] : "var(--border-glow)"}`,
               cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, transition: "border 0.2s",
               boxShadow: activeTheme === name ? `0 0 12px ${vars["--accent-primary"]}33` : "none",
             }}>
               <div style={{ width: 16, height: 16, borderRadius: 8, background: vars["--accent-primary"] }} />
-              <span style={{ fontSize: 10, color: "#e0e0e0", textTransform: "capitalize" }}>{name}</span>
+              <span style={{ fontSize: 10, color: "var(--text-primary)", textTransform: "capitalize" }}>{name}</span>
               {activeTheme === name && <span style={{ fontSize: 8, color: vars["--accent-primary"] }}>✓</span>}
             </div>
           ))}
         </div>
 
-        <label style={{ fontSize: 12, color: "#888899", marginBottom: 8, display: "block" }}>Font Size</label>
+        <label style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>Font Size</label>
         <div style={{ display: "flex", gap: 8 }}>
           {(["small", "medium", "large"] as const).map(size => (
             <button key={size} onClick={() => applyFontSize(size)} style={{
-              flex: 1, padding: "10px", borderRadius: 10, border: `1px solid ${fontSize === size ? "#00ff88" : "rgba(255,255,255,0.1)"}`,
-              background: fontSize === size ? "#00ff8822" : "transparent", color: fontSize === size ? "#00ff88" : "#888899",
+              flex: 1, padding: "10px", borderRadius: 10, border: `1px solid ${fontSize === size ? "var(--accent-primary)" : "var(--border-glow)"}`,
+              background: fontSize === size ? "color-mix(in srgb, var(--accent-primary) 15%, transparent)" : "transparent", color: fontSize === size ? "var(--accent-primary)" : "var(--text-secondary)",
               cursor: "pointer", fontSize: 12, textTransform: "capitalize",
             }}>{size}</button>
           ))}
         </div>
       </div>
 
-      <div style={divider} />
-
-      {/* SECURITY */}
-      <div style={sectionStyle}>
-        <div style={headerStyle}>Security</div>
-        <button style={btnOutline} onClick={() => setShowPasswordModal(true)}>Change Password</button>
-      </div>
-
       {isAdmin && (
         <>
           <div style={divider} />
-          <div style={{ ...sectionStyle, borderLeft: "3px solid #00ff88", paddingLeft: 20 }}>
+          <div style={{ ...sectionStyle, borderLeft: "3px solid var(--accent-primary)", paddingLeft: 20 }}>
             <div
               style={headerStyle}
               onClick={handleAdminTap}
@@ -428,7 +449,7 @@ export default function SettingsTab() {
               <button style={btnOutline} onClick={() => showToast("Logs coming soon", "info")}>View Logs →</button>
               {showTerminalBtn && (
                 <button
-                  style={{ ...btnOutline, borderColor: "#00ff88", animation: "pulse 2s infinite" }}
+                  style={{ ...btnOutline, borderColor: "var(--accent-primary)", animation: "pulse 2s infinite" }}
                   onClick={openTerminal}
                 >
                   Open Terminal
@@ -444,47 +465,30 @@ export default function SettingsTab() {
       {/* ABOUT */}
       <div style={sectionStyle}>
         <div style={headerStyle}>About</div>
-        <div style={{ color: "#00ff88", fontSize: 18, fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>NEXUS</div>
-        <div style={{ color: "#888899", fontSize: 12, marginTop: 4 }}>v1.0.0</div>
-        <div style={{ color: "#888899", fontSize: 12, marginTop: 2 }}>Private Team Communication Platform</div>
-        <div style={{ color: "#888899", fontSize: 12, marginTop: 8 }}>Built with care by the team</div>
+        <div style={{ color: "var(--accent-primary)", fontSize: 18, fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>NEXUS</div>
+        <div style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 4 }}>v1.0.0</div>
+        <div style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 2 }}>Private Team Communication Platform</div>
+        <div style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 8 }}>Built with care by the team</div>
       </div>
 
       <div style={divider} />
 
       {/* LOGOUT */}
       <div style={{ ...sectionStyle, marginBottom: 40 }}>
-        <button onClick={() => setShowLogoutConfirm(true)} style={{ ...btnOutline, borderColor: "#ff3366", color: "#ff3366" }}>
+        <button onClick={() => setShowLogoutConfirm(true)} style={{ ...btnOutline, borderColor: "var(--danger)", color: "var(--danger)" }}>
           Disconnect
         </button>
       </div>
-
-      {/* PASSWORD MODAL */}
-      {showPasswordModal && (
-        <div style={modalOverlay} onClick={() => setShowPasswordModal(false)}>
-          <div style={modalBox} onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: "#e0e0e0", marginTop: 0, marginBottom: 16 }}>Change Password</h3>
-            <input style={{ ...inputStyle, marginBottom: 12 }} type="password" placeholder="New password (min 8 chars)" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-            <input style={{ ...inputStyle, marginBottom: 16 }} type="password" placeholder="Confirm new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...btnOutline, flex: 1 }} onClick={() => setShowPasswordModal(false)}>Cancel</button>
-              <button style={{ ...btnPrimary, flex: 1, opacity: newPassword.length >= 8 && newPassword === confirmPassword ? 1 : 0.4 }} onClick={handleChangePassword} disabled={passwordLoading}>
-                {passwordLoading ? "Updating..." : "Update"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* LOGOUT CONFIRM */}
       {showLogoutConfirm && (
         <div style={modalOverlay} onClick={() => setShowLogoutConfirm(false)}>
           <div style={modalBox} onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: "#e0e0e0", marginTop: 0 }}>Disconnect from NEXUS?</h3>
-            <p style={{ color: "#888899", fontSize: 14 }}>You will need to log in again to access your chats.</p>
+            <h3 style={{ color: "var(--text-primary)", marginTop: 0 }}>Disconnect from NEXUS?</h3>
+            <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>You will need to log in again to access your chats.</p>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
               <button style={{ ...btnOutline, flex: 1 }} onClick={() => setShowLogoutConfirm(false)}>Cancel</button>
-              <button style={{ ...btnOutline, flex: 1, borderColor: "#ff3366", color: "#ff3366" }} onClick={handleLogout}>Disconnect</button>
+              <button style={{ ...btnOutline, flex: 1, borderColor: "var(--danger)", color: "var(--danger)" }} onClick={handleLogout}>Disconnect</button>
             </div>
           </div>
         </div>
@@ -494,7 +498,7 @@ export default function SettingsTab() {
       {askingKey && (
         <div style={modalOverlay} onClick={() => setAskingKey(false)}>
           <div style={modalBox} onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: "#00ff88", marginTop: 0, fontFamily: "monospace" }}>Enter Secret Key</h3>
+            <h3 style={{ color: "var(--accent-primary)", marginTop: 0, fontFamily: "monospace" }}>Enter Secret Key</h3>
             <input
               style={{ ...inputStyle, marginBottom: 16, fontFamily: "monospace" }}
               type="password"
@@ -512,22 +516,22 @@ export default function SettingsTab() {
       {/* TERMINAL */}
       {terminalOpen && (
         <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999, display: "flex", flexDirection: "column", fontFamily: "JetBrains Mono, Courier New, monospace" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", borderBottom: "1px solid #00ff8833" }}>
-            <span style={{ color: "#00ff88", fontSize: 12 }}>NEXUS TERMINAL</span>
-            <button onClick={() => setTerminalOpen(false)} style={{ background: "none", border: "none", color: "#ff3366", fontSize: 18, cursor: "pointer" }}>✕</button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", borderBottom: "1px solid var(--border-glow)" }}>
+            <span style={{ color: "var(--accent-primary)", fontSize: 12 }}>NEXUS TERMINAL</span>
+            <button onClick={() => setTerminalOpen(false)} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 18, cursor: "pointer" }}>✕</button>
           </div>
           <div ref={termOutputRef} style={{ flex: 1, overflowY: "auto", padding: 16, fontSize: 13, lineHeight: 1.6 }}>
             {terminalHistory.map((h, i) => (
-              <div key={i} style={{ color: h.type === "input" ? "#0ea5e9" : "#00ff88", whiteSpace: "pre-wrap" as const, wordBreak: "break-word" as const, marginBottom: 4 }}>{h.text}</div>
+              <div key={i} style={{ color: h.type === "input" ? "var(--accent-secondary)" : "var(--accent-primary)", whiteSpace: "pre-wrap" as const, wordBreak: "break-word" as const, marginBottom: 4 }}>{h.text}</div>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", padding: "8px 16px", borderTop: "1px solid #00ff8833" }}>
-            <span style={{ color: "#00ff88", marginRight: 8 }}>&gt;</span>
+          <div style={{ display: "flex", alignItems: "center", padding: "8px 16px", borderTop: "1px solid var(--border-glow)" }}>
+            <span style={{ color: "var(--accent-primary)", marginRight: 8 }}>&gt;</span>
             <input
               ref={termInputRef}
               onKeyDown={handleTerminalKey}
               autoFocus
-              style={{ flex: 1, background: "none", border: "none", color: "#00ff88", fontSize: 14, outline: "none", fontFamily: "inherit", caretColor: "#00ff88" }}
+              style={{ flex: 1, background: "none", border: "none", color: "var(--accent-primary)", fontSize: 14, outline: "none", fontFamily: "inherit", caretColor: "var(--accent-primary)" }}
               placeholder="Type a command..."
             />
           </div>
