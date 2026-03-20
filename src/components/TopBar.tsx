@@ -69,9 +69,9 @@ const TopBar = ({ notificationCount = 0, user, activeConversation, onBack }: Top
   return (
     <header
       className="fixed left-0 right-0 top-0 z-50 bg-card border-b border-border safe-top"
-      style={{ paddingTop: 0, paddingBottom: 0, paddingLeft: "1rem", paddingRight: "1rem" }}
+      style={{ paddingLeft: "1rem", paddingRight: "1rem" }}
     >
-      {/* Inner flex container — always 56px tall, centered content */}
+      {/* Inner flex container — centered content with breathing room */}
       <div className="flex items-center justify-between" style={{ height: 56 }}>
         {/* Left section */}
         <div className="flex items-center gap-2 flex-shrink-0">
