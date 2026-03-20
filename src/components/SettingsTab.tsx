@@ -3,17 +3,13 @@ import {
   User,
   Bell,
   Palette,
-  HardDrive,
   Shield,
-  Lock,
   Info,
   LogOut,
   Camera,
   ChevronRight,
   Terminal,
   Loader2,
-  Download,
-  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -105,27 +101,14 @@ const SettingsTab = () => {
         };
   });
 
-  const [storageUsed, setStorageUsed] = useState(0);
-  const [exporting, setExporting] = useState(false);
-  const [clearingCache, setClearingCache] = useState(false);
-
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showIntegrations, setShowIntegrations] = useState(false);
   const [showSystemLogs, setShowSystemLogs] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
   const [showTerminalButton, setShowTerminalButton] = useState(false);
 
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [passwordLoading, setPasswordLoading] = useState(false);
-
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
-
-  const [showDeleteData, setShowDeleteData] = useState(false);
-  const [deleteDataLoading, setDeleteDataLoading] = useState(false);
 
   const [tapCount, setTapCount] = useState(0);
   const [lastTap, setLastTap] = useState(0);
@@ -139,10 +122,6 @@ const SettingsTab = () => {
     setOriginalDisplayName(user?.display_name || "");
     setOriginalStatus(user?.custom_status || "");
   }, [user]);
-
-  useEffect(() => {
-    calculateStorage();
-  }, []);
 
   useEffect(() => {
     applyTheme(appearancePrefs.theme);
@@ -354,198 +333,6 @@ const SettingsTab = () => {
     const prefs = { ...appearancePrefs, reducedMotion: enabled };
     setAppearancePrefs(prefs);
     localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
-  };
-
-  const calculateStorage = async () => {
-    try {
-      const { data, error } = await supabase.storage.from("nexus-files").list("", { limit: 1000 });
-      if (error) throw error;
-
-      let totalSize = 0;
-      if (data) {
-        for (const item of data) {
-          if (item.metadata?.size) {
-            totalSize += item.metadata.size;
-          }
-        }
-      }
-      setStorageUsed(totalSize);
-    } catch {
-      setStorageUsed(0);
-    }
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return "0 MB";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
-  };
-
-  const handleClearCache = async () => {
-    setClearingCache(true);
-    try {
-      Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith("nexus_")) localStorage.removeItem(key);
-      });
-      sessionStorage.clear();
-
-      if ("caches" in window) {
-        const names = await caches.keys();
-        await Promise.all(names.map((name) => caches.delete(name)));
-      }
-
-      toast.success("Cache cleared successfully");
-      setTimeout(() => window.location.reload(), 1000);
-    } catch {
-      toast.error("Failed to clear some cache data");
-    } finally {
-      setClearingCache(false);
-    }
-  };
-
-  const handleExportChats = async () => {
-    if (!user) return;
-
-    setExporting(true);
-    try {
-      const { data: memberships } = await supabase
-        .from("conversation_members")
-        .select("conversation_id")
-        .eq("user_id", user.id);
-
-      const convIds = memberships?.map((m) => m.conversation_id) || [];
-
-      if (convIds.length === 0) {
-        toast.info("No conversations to export");
-        setExporting(false);
-        return;
-      }
-
-      const { data: messages } = await supabase
-        .from("messages")
-        .select(
-          `
-          id, content, type, created_at,
-          sender:profiles!sender_id(display_name),
-          conversation:conversations(name, type)
-        `
-        )
-        .in("conversation_id", convIds)
-        .eq("is_deleted", false)
-        .order("created_at", { ascending: true });
-
-      let exportText = `NEXUS Chat Export\n`;
-      exportText += `Exported by: ${user.display_name || user.username}\n`;
-      exportText += `Date: ${new Date().toLocaleString()}\n`;
-      exportText += `Total messages: ${messages?.length || 0}\n`;
-      exportText += `================================\n\n`;
-
-      const groupedMessages: Record<string, typeof messages> = {};
-      messages?.forEach((msg) => {
-        const convName = msg.conversation?.name || "Unknown";
-        if (!groupedMessages[convName]) groupedMessages[convName] = [];
-        groupedMessages[convName].push(msg);
-      });
-
-      Object.entries(groupedMessages).forEach(([convName, msgs]) => {
-        const firstMsg = msgs[0];
-        const convType = firstMsg.conversation?.type || "direct";
-        exportText += `[${convType === "group" ? "Group" : "DM"}: ${convName}]\n`;
-
-        msgs.forEach((msg) => {
-          const date = new Date(msg.created_at).toLocaleString();
-          const sender = msg.sender?.display_name || "Unknown";
-          const content = msg.content || (msg.type === "image" ? "[Image]" : msg.type === "file" ? "[File]" : "[Message]");
-          exportText += `[${date}] ${sender}: ${content}\n`;
-        });
-        exportText += `\n`;
-      });
-
-      const blob = new Blob([exportText], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `nexus_export_${new Date().toISOString().split("T")[0]}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.success("Chat history exported successfully");
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to export chat history");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleDeleteData = async () => {
-    if (!user) return;
-
-    setDeleteDataLoading(true);
-    try {
-      const { data: memberships } = await supabase
-        .from("conversation_members")
-        .select("conversation_id")
-        .eq("user_id", user.id);
-
-      const convIds = memberships?.map((m) => m.conversation_id) || [];
-
-      for (const convId of convIds) {
-        await supabase
-          .from("messages")
-          .update({ is_deleted: true })
-          .eq("conversation_id", convId)
-          .eq("sender_id", user.id);
-      }
-
-      await supabase
-        .from("conversation_members")
-        .delete()
-        .eq("user_id", user.id);
-
-      await supabase
-        .from("notifications")
-        .delete()
-        .eq("user_id", user.id);
-
-      toast.success("Your data has been deleted");
-      setShowDeleteData(false);
-      setTimeout(() => logout(), 1000);
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to delete data");
-    } finally {
-      setDeleteDataLoading(false);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords don't match");
-      return;
-    }
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters");
-      return;
-    }
-
-    setPasswordLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-      if (error) throw error;
-
-      toast.success("Password updated successfully");
-      setShowPasswordModal(false);
-      setNewPassword("");
-      setConfirmPassword("");
-      setCurrentPassword("");
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to update password");
-    } finally {
-      setPasswordLoading(false);
-    }
   };
 
   const handleLogout = async () => {
@@ -852,73 +639,6 @@ const SettingsTab = () => {
             />
           </div>
 
-          <div className="border-t border-border/50" />
-
-          <SectionHeader icon={HardDrive} label="Storage & Data" />
-
-          <div className="px-4 py-4 space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-muted-foreground">Storage Used</span>
-                <span className="text-xs font-mono text-foreground">
-                  {formatBytes(storageUsed)} / 50 MB
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all"
-                  style={{ width: `${Math.min((storageUsed / (50 * 1024 * 1024)) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={handleExportChats}
-              disabled={exporting}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 font-display text-sm font-medium text-foreground transition-all hover:bg-muted/50 active:scale-[0.98] disabled:opacity-50"
-            >
-              {exporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  Export Chat History
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={handleClearCache}
-              disabled={clearingCache}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 font-display text-sm font-medium text-foreground transition-all hover:bg-muted/50 active:scale-[0.98] disabled:opacity-50"
-            >
-              {clearingCache ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Clearing...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4" />
-                  Clear Cache
-                </>
-              )}
-            </button>
-
-            {user?.role !== "admin" && (
-              <button
-                onClick={() => setShowDeleteData(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/50 py-2.5 font-display text-sm font-medium text-destructive transition-all hover:bg-destructive/10 active:scale-[0.98]"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete My Data
-              </button>
-            )}
-          </div>
-
           {user?.role === "admin" && (
             <>
               <div className="border-t border-border/50" />
@@ -1028,102 +748,6 @@ const SettingsTab = () => {
         />
       )}
 
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-2xl animate-scale-in">
-            <div className="flex items-center justify-between border-b border-border p-4">
-              <h2 className="font-display text-lg font-bold text-foreground">
-                Change Password
-              </h2>
-              <button
-                onClick={() => setShowPasswordModal(false)}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-4 p-4">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-                  placeholder="Min 8 characters"
-                />
-                {newPassword && (
-                  <div className="mt-1">
-                    <div className="h-1 rounded-full bg-muted">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          newPassword.length < 8
-                            ? "bg-destructive w-1/4"
-                            : newPassword.length < 12
-                            ? "bg-warning w-2/4"
-                            : "bg-primary w-full"
-                        }`}
-                      />
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {newPassword.length < 8
-                        ? "Too short"
-                        : newPassword.length < 12
-                        ? "Good"
-                        : "Strong"}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-                  placeholder="Confirm your password"
-                />
-                {confirmPassword && newPassword !== confirmPassword && (
-                  <span className="mt-1 block text-xs text-destructive">Passwords don't match</span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-border p-4">
-              <button
-                onClick={() => setShowPasswordModal(false)}
-                className="rounded-lg px-4 py-2 font-display text-sm font-medium text-muted-foreground hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleChangePassword}
-                disabled={passwordLoading || newPassword !== confirmPassword || newPassword.length < 8}
-                className="rounded-lg bg-primary px-4 py-2 font-display text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {passwordLoading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Updating...
-                  </span>
-                ) : (
-                  "Update Password"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <ConfirmDialog
         open={showLogoutConfirm}
         onClose={() => setShowLogoutConfirm(false)}
@@ -1133,28 +757,6 @@ const SettingsTab = () => {
         confirmText="Disconnect"
         confirmColor="destructive"
         loading={logoutLoading}
-      />
-
-      <ConfirmDialog
-        open={showDeleteData}
-        onClose={() => setShowDeleteData(false)}
-        onConfirm={handleDeleteData}
-        title="Delete All Your Data"
-        message={
-          <>
-            <div className="flex items-center gap-2 mb-2 text-destructive">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span className="font-semibold">This action cannot be undone!</span>
-            </div>
-            <p>This will permanently delete all your messages, conversations, and notifications.</p>
-          </>
-        }
-        confirmText="Delete Everything"
-        confirmColor="destructive"
-        requireText="DELETE"
-        loading={deleteDataLoading}
       />
     </>
   );
