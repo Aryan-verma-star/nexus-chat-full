@@ -75,42 +75,102 @@ export async function getConversations(userId: string): Promise<Conversation[]> 
     .select('conversation_id')
     .eq('user_id', userId);
 
-  if (memErr) throw memErr;
+  if (memErr) {
+    console.error('[Chat] Failed to get memberships:', memErr);
+    throw memErr;
+  }
   if (!memberships || memberships.length === 0) return [];
 
-  const ids = memberships.map(m => m.conversation_id);
+  const convIds = memberships.map(m => m.conversation_id);
 
-  const { data, error } = await supabase
+  const { data: convs, error: convErr } = await supabase
     .from('conversations')
-    .select(`
-      *,
-      members:conversation_members(
-        *,
-        profile:profiles(id, username, display_name, avatar_url, is_online, last_seen, custom_status)
-      )
-    `)
-    .in('id', ids)
+    .select('*')
+    .in('id', convIds)
     .order('last_message_at', { ascending: false });
 
-  if (error) throw error;
-  return (data || []) as Conversation[];
+  if (convErr) {
+    console.error('[Chat] Failed to get conversations:', convErr);
+    throw convErr;
+  }
+  if (!convs || convs.length === 0) return [];
+
+  const convMembersMap = new Map<string, any[]>();
+  const allUserIds = new Set<string>();
+
+  for (const convId of convIds) {
+    const { data: members } = await supabase
+      .from('conversation_members')
+      .select('*')
+      .eq('conversation_id', convId);
+
+    convMembersMap.set(convId, members || []);
+    (members || []).forEach(m => allUserIds.add(m.user_id));
+  }
+
+  if (allUserIds.size === 0) {
+    return convs.map(c => ({ ...c, members: [] })) as Conversation[];
+  }
+
+  const { data: allProfiles } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url, is_online, last_seen, custom_status, role')
+    .in('id', Array.from(allUserIds));
+
+  const profileMap = new Map<string, any>();
+  (allProfiles || []).forEach(p => profileMap.set(p.id, p));
+
+  const results: Conversation[] = convs.map(conv => ({
+    ...conv,
+    members: (convMembersMap.get(conv.id) || []).map(m => ({
+      ...m,
+      profile: profileMap.get(m.user_id) || null,
+    })),
+  }));
+
+  console.log('[Chat] Loaded', results.length, 'conversations with', allUserIds.size, 'unique profiles');
+  return results as Conversation[];
 }
 
 export async function getConversation(convId: string): Promise<Conversation> {
-  const { data, error } = await supabase
+  const { data: conv, error: convErr } = await supabase
     .from('conversations')
-    .select(`
-      *,
-      members:conversation_members(
-        *,
-        profile:profiles(id, username, display_name, avatar_url, is_online, last_seen, custom_status)
-      )
-    `)
+    .select('*')
     .eq('id', convId)
     .single();
 
-  if (error) throw error;
-  return data as Conversation;
+  if (convErr) {
+    console.error('[Chat] Failed to get conversation:', convErr);
+    throw convErr;
+  }
+
+  const { data: members } = await supabase
+    .from('conversation_members')
+    .select('*')
+    .eq('conversation_id', convId);
+
+  const allUserIds = (members || []).map(m => m.user_id);
+
+  let profileMap = new Map<string, any>();
+  if (allUserIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_url, is_online, last_seen, custom_status, role')
+      .in('id', allUserIds);
+
+    (profiles || []).forEach(p => profileMap.set(p.id, p));
+  }
+
+  const enriched = {
+    ...conv,
+    members: (members || []).map(m => ({
+      ...m,
+      profile: profileMap.get(m.user_id) || null,
+    })),
+  };
+
+  console.log('[Chat] Loaded conversation', convId, 'with', enriched.members.length, 'members');
+  return enriched as Conversation;
 }
 
 export async function createDirectConversation(userId: string, otherUserId: string): Promise<Conversation> {
@@ -119,27 +179,34 @@ export async function createDirectConversation(userId: string, otherUserId: stri
     .select('conversation_id')
     .eq('user_id', userId);
 
-  if (myMemberships) {
-    for (const mem of myMemberships) {
+  if (myMemberships && myMemberships.length > 0) {
+    const myConvIds = myMemberships.map(m => m.conversation_id);
+
+    for (const convId of myConvIds) {
       const { data: conv } = await supabase
         .from('conversations')
-        .select('*')
-        .eq('id', mem.conversation_id)
+        .select('id')
+        .eq('id', convId)
         .eq('type', 'direct')
-        .single();
+        .maybeSingle();
 
-      if (conv) {
-        const { data: otherMem } = await supabase
-          .from('conversation_members')
-          .select('user_id')
-          .eq('conversation_id', conv.id)
-          .eq('user_id', otherUserId)
-          .maybeSingle();
+      if (!conv) continue;
 
-        if (otherMem) return conv as Conversation;
+      const { data: otherMem } = await supabase
+        .from('conversation_members')
+        .select('user_id')
+        .eq('conversation_id', convId)
+        .eq('user_id', otherUserId)
+        .maybeSingle();
+
+      if (otherMem) {
+        console.log('[Chat] Existing DM found:', convId);
+        return getConversation(convId);
       }
     }
   }
+
+  console.log('[Chat] Creating new DM between', userId, 'and', otherUserId);
 
   const { data: conv, error: convErr } = await supabase
     .from('conversations')
@@ -157,7 +224,7 @@ export async function createDirectConversation(userId: string, otherUserId: stri
     ]);
 
   if (memErr) throw memErr;
-  return conv as Conversation;
+  return getConversation(conv.id);
 }
 
 export async function createGroupConversation(params: {

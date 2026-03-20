@@ -98,45 +98,72 @@ export default function ConversationView() {
     );
   }
 
-  const currentUserId = user?.id || "";
-  const otherMember = activeConversation.type === "direct"
-    ? activeConversation.members?.find(m => m.user_id !== currentUserId)
-    : null;
-  const isOtherOnline = activeConversation.type === "direct" && otherMember?.profile?.is_online;
-  const convName = activeConversation.type === "direct"
-    ? (otherMember?.profile?.display_name || otherMember?.profile?.username || "Direct Chat")
-    : (activeConversation.name || "Group");
-  const convAvatar = convName.charAt(0).toUpperCase();
+  const getConvName = () => {
+    if (activeConversation.type === 'group') {
+      return activeConversation.name || 'Unnamed Group';
+    }
+    const other = activeConversation.members?.find(m => {
+      const mid = m.user_id || (m.profile as any)?.id;
+      return mid !== user?.id;
+    });
+    return other?.profile?.display_name || other?.profile?.username || '(No name)';
+  };
+
+  const getConvSubtitle = () => {
+    if (activeConversation.type === 'group') {
+      return `${activeConversation.members?.length || 0} member${activeConversation.members?.length !== 1 ? 's' : ''}`;
+    }
+    const other = activeConversation.members?.find(m => {
+      const mid = m.user_id || (m.profile as any)?.id;
+      return mid !== user?.id;
+    });
+    if (other?.profile?.is_online) return 'Online';
+    return other?.profile?.custom_status || 'Offline';
+  };
+
+  const getConvAvatarUrl = () => {
+    if (activeConversation.type === 'group') return activeConversation.avatar_url || null;
+    const other = activeConversation.members?.find(m => {
+      const mid = m.user_id || (m.profile as any)?.id;
+      return mid !== user?.id;
+    });
+    return other?.profile?.avatar_url || null;
+  };
+
+  const convName = getConvName();
+  const convSubtitle = getConvSubtitle();
+  const convAvatarUrl = getConvAvatarUrl();
+  const convInitial = convName[0]?.toUpperCase() || '?';
 
   const typingNames = getTypingNames(typingUsers, users);
 
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border px-3 py-3 bg-background">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card safe-top">
         <button
           onClick={() => setActiveConversation(null)}
-          className="p-1 transition-transform active:scale-95 md:hidden"
+          className="md:hidden flex-shrink-0 w-8 h-8 flex items-center justify-center text-muted-foreground active:scale-90"
         >
-          <ArrowLeft className="h-5 w-5 text-foreground" />
+          <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="relative flex-shrink-0">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface font-display text-sm text-primary">
-            {convAvatar}
+          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+            {activeConversation.type === 'group' ? (
+              <span className="text-base">👥</span>
+            ) : convAvatarUrl ? (
+              <img src={convAvatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-foreground font-bold text-sm">{convInitial}</span>
+            )}
           </div>
-          {isOtherOnline && (
-            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+          {activeConversation.type === 'direct' && getConvSubtitle() === 'Online' && (
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-green-500" />
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-body text-base font-semibold text-foreground truncate">{convName}</p>
-          <p className="font-body text-[11px] text-muted-foreground">
-            {activeConversation.type === "direct"
-              ? isOtherOnline
-                ? <span className="text-primary">online</span>
-                : "offline"
-              : `${activeConversation.members?.length || 0} members`}
-          </p>
+          <p className="text-foreground font-semibold text-[15px] truncate">{convName}</p>
+          <p className="text-muted-foreground text-xs truncate">{convSubtitle}</p>
         </div>
         <button className="p-2 transition-transform active:scale-95">
           <MoreVertical className="h-5 w-5 text-muted-foreground" />

@@ -1,8 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useChat } from '../hooks/useChat';
 import { useAuth } from '../hooks/useAuth';
 import NewChatSheet from './NewChatSheet';
 import CreateGroupSheet from './CreateGroupSheet';
+import type { Conversation } from '../lib/chat';
+
+const formatTime = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'now';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
 export default function ChatList() {
   const { conversations, setActiveConversation, loading } = useChat();
@@ -12,48 +28,76 @@ export default function ChatList() {
   const [showFab, setShowFab] = useState(false);
   const [filter, setFilter] = useState<'all' | 'direct' | 'group'>('all');
 
-  const filtered = conversations.filter(c => {
-    if (filter === 'direct') return c.type === 'direct';
-    if (filter === 'group') return c.type === 'group';
-    return true;
-  });
+  useEffect(() => {
+    if (conversations.length > 0) {
+      console.log('[ChatList] Loaded', conversations.length, 'conversations:');
+      conversations.forEach(c => {
+        const memberCount = c.members?.length || 0;
+        const names = c.members?.map(m => m.profile?.display_name || m.user_id).join(', ') || '(no members)';
+        console.log(`  ${c.id.slice(0,8)}: type=${c.type} name="${c.name || ''}" members=${memberCount} [${names}]`);
+      });
+    }
+  }, [conversations]);
 
-  const getDisplayName = (conv: any) => {
-    if (conv.type === 'group') return conv.name || 'Group';
-    const other = conv.members?.find((m: any) => m.user_id !== user?.id);
-    return other?.profile?.display_name || other?.profile?.username || 'Chat';
+  const getOtherMember = (conv: Conversation) => {
+    if (!conv.members || conv.members.length === 0) return null;
+    return conv.members.find(m => {
+      const memberId = m.user_id || (m.profile as any)?.id;
+      return memberId !== user?.id;
+    }) || null;
   };
 
-  const getAvatar = (conv: any) => {
-    if (conv.type === 'group') return null;
-    const other = conv.members?.find((m: any) => m.user_id !== user?.id);
+  const getDisplayName = (conv: Conversation): string => {
+    if (conv.type === 'group') {
+      return conv.name || 'Unnamed Group';
+    }
+
+    const other = getOtherMember(conv);
+
+    if (other?.profile?.display_name) {
+      return other.profile.display_name;
+    }
+    if (other?.profile?.username) {
+      return other.profile.username;
+    }
+    if (other?.user_id) {
+      return `[User ${other.user_id.slice(0, 8)}]`;
+    }
+    if (conv.last_message_sender && conv.last_message_sender !== user?.display_name) {
+      return conv.last_message_sender;
+    }
+    return '(No name)';
+  };
+
+  const getAvatarUrl = (conv: Conversation): string | null => {
+    if (conv.type === 'group') return conv.avatar_url || null;
+    const other = getOtherMember(conv);
     return other?.profile?.avatar_url || null;
   };
 
-  const getInitial = (conv: any) => {
-    return (getDisplayName(conv) || '?')[0]?.toUpperCase() || '?';
+  const getInitial = (conv: Conversation): string => {
+    return getDisplayName(conv)[0]?.toUpperCase() || '?';
   };
 
-  const isOnline = (conv: any) => {
+  const isOnline = (conv: Conversation): boolean => {
     if (conv.type === 'group') return false;
-    const other = conv.members?.find((m: any) => m.user_id !== user?.id);
+    const other = getOtherMember(conv);
     return other?.profile?.is_online || false;
   };
 
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'now';
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  };
+  const filtered = conversations
+    .filter(c => {
+      if (filter === 'direct') return c.type === 'direct';
+      if (filter === 'group') return c.type === 'group';
+      return true;
+    })
+    .filter(c => {
+      if (c.type === 'direct' && (!c.members || c.members.length < 2)) {
+        console.warn('[ChatList] Filtering out broken DM:', c.id);
+        return false;
+      }
+      return true;
+    });
 
   if (loading) {
     return (
@@ -117,8 +161,8 @@ export default function ChatList() {
                 <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden">
                   {conv.type === 'group' ? (
                     <span className="text-lg">👥</span>
-                  ) : getAvatar(conv) ? (
-                    <img src={getAvatar(conv)!} alt="" className="w-full h-full object-cover" />
+                  ) : getAvatarUrl(conv) ? (
+                    <img src={getAvatarUrl(conv)!} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-foreground font-bold text-sm">{getInitial(conv)}</span>
                   )}
