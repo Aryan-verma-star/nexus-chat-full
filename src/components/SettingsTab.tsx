@@ -967,40 +967,6 @@ const SettingsTab = () => {
 
           <div className="border-t border-border/50" />
 
-          <SectionHeader icon={Lock} label="Security" />
-
-          <div className="px-4 py-4 space-y-4">
-            <button
-              onClick={() => setShowPasswordModal(true)}
-              className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 font-display text-sm font-medium text-foreground transition-all hover:bg-muted/50 active:scale-[0.98]"
-            >
-              Change Password
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </button>
-
-            <div className="rounded-xl border border-border px-4 py-3">
-              <p className="text-xs text-muted-foreground mb-1">Current Session</p>
-              <p className="text-sm text-foreground">
-                Started: {new Date(user?.last_seen || Date.now()).toLocaleDateString()}
-              </p>
-              <button
-                onClick={async () => {
-                  try {
-                    await supabase.auth.signOut({ scope: "others" });
-                    toast.success("All other sessions terminated");
-                  } catch {
-                    toast.error("Failed to sign out other sessions");
-                  }
-                }}
-                className="mt-2 text-xs text-primary hover:underline"
-              >
-                Sign out all other devices
-              </button>
-            </div>
-          </div>
-
-          <div className="border-t border-border/50" />
-
           <SectionHeader icon={Info} label="About" />
 
           <div className="px-4 py-4 space-y-3">
@@ -1017,14 +983,6 @@ const SettingsTab = () => {
             <div className="border-t border-border/50 pt-3 space-y-2">
               <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-foreground transition-all hover:bg-muted/50">
                 Report Bug
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-              <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-foreground transition-all hover:bg-muted/50">
-                Documentation
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-              <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-foreground transition-all hover:bg-muted/50">
-                Licenses
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </button>
             </div>
