@@ -69,7 +69,7 @@ const TopBar = ({ notificationCount = 0, user, activeConversation, onBack }: Top
   return (
     <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center border-b border-border bg-card px-4 safe-top">
       {/* Left section */}
-      <div className="flex items-center gap-2 min-w-0 flex-shrink-0" style={{ width: isChat ? "auto" : undefined }}>
+      <div className="flex items-center gap-2" style={{ flexShrink: isChat ? 1 : 0 }}>
         {isChat && onBack && (
           <button
             onClick={onBack}
@@ -100,10 +100,10 @@ const TopBar = ({ notificationCount = 0, user, activeConversation, onBack }: Top
             </div>
           </button>
         ) : (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-shrink-0 overflow-hidden">
               <span className="font-display text-base font-bold text-primary tracking-wide">NEXUS</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-primary pulse-dot" />
-          </div>
+              <span className="h-1.5 w-1.5 rounded-full bg-primary pulse-dot" />
+            </div>
         )}
       </div>
 
