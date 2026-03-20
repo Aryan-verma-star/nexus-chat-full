@@ -1,805 +1,540 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import {
-  User,
-  Bell,
-  Palette,
-  Shield,
-  Info,
-  LogOut,
-  Camera,
-  ChevronRight,
-  Terminal,
-  Loader2,
-  Lock,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase, User as ProfileUser } from "@/lib/supabase";
-import { toast } from "sonner";
-import { ToggleSwitch } from "./settings/ToggleSwitch";
-import { ConfirmDialog } from "./settings/ConfirmDialog";
-import { AdminTerminal } from "./settings/AdminTerminal";
-import { UserManagementModal } from "./settings/UserManagementModal";
-import { IntegrationCards } from "./settings/IntegrationCards";
-import { SystemLogs } from "./settings/SystemLogs";
+import { supabase } from "@/lib/supabase";
 
-interface NotificationPrefs {
-  push: boolean;
-  messages: boolean;
-  jobs: boolean;
-  sound: boolean;
-  vibration: boolean;
-}
-
-interface AppearancePrefs {
-  theme: string;
-  fontSize: string;
-  reducedMotion: boolean;
-}
-
-const THEMES = {
-  cyber: {
-    name: "Cyber",
-    bgPrimary: "#0a0a0f",
-    bgSecondary: "#12121a",
-    accentPrimary: "#00ff88",
-    accentSecondary: "#0ea5e9",
-  },
-  midnight: {
-    name: "Midnight",
-    bgPrimary: "#0d1117",
-    bgSecondary: "#161b22",
-    accentPrimary: "#58a6ff",
-    accentSecondary: "#3fb950",
-  },
-  phantom: {
-    name: "Phantom",
-    bgPrimary: "#13111c",
-    bgSecondary: "#1a1730",
-    accentPrimary: "#a78bfa",
-    accentSecondary: "#f472b6",
-  },
+const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+  const toast = document.createElement("div");
+  toast.style.cssText = `
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999;
+    padding: 12px 24px; border-radius: 12px; font-size: 14px; font-family: Inter, sans-serif;
+    background: ${type === "error" ? "#1a0a0f" : type === "success" ? "#0a1a0f" : "#12121a"};
+    color: ${type === "error" ? "#ff3366" : type === "success" ? "#00ff88" : "#e0e0e0"};
+    border: 1px solid ${type === "error" ? "#ff336633" : type === "success" ? "#00ff8833" : "#ffffff11"};
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5); transition: all 0.3s ease;
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 };
 
-const FONT_SIZES = {
-  small: "13px",
-  medium: "14px",
-  large: "16px",
+const THEMES: Record<string, Record<string, string>> = {
+  cyber: { "--bg-primary": "#0a0a0f", "--bg-secondary": "#12121a", "--accent-primary": "#00ff88", "--accent-secondary": "#0ea5e9" },
+  midnight: { "--bg-primary": "#0d1117", "--bg-secondary": "#161b22", "--accent-primary": "#58a6ff", "--accent-secondary": "#3fb950" },
+  phantom: { "--bg-primary": "#13111c", "--bg-secondary": "#1a1730", "--accent-primary": "#a78bfa", "--accent-secondary": "#f472b6" },
 };
 
-const SettingsTab = () => {
-  const { user, logout, updateUser } = useAuth();
-  const navigate = useNavigate();
+const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
+  <div
+    onClick={() => onChange(!checked)}
+    style={{
+      width: 48, height: 28, borderRadius: 14, background: checked ? "#00ff88" : "#333",
+      cursor: "pointer", position: "relative", transition: "background 0.2s",
+    }}
+  >
+    <div style={{
+      width: 22, height: 22, borderRadius: 11, background: "#fff",
+      position: "absolute", top: 3, left: checked ? 23 : 3, transition: "left 0.2s",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+    }} />
+  </div>
+);
 
-  const [avatarLoading, setAvatarLoading] = useState(false);
-  const [displayName, setDisplayName] = useState(user?.display_name || "");
-  const [customStatus, setCustomStatus] = useState(user?.custom_status || "");
-  const [originalDisplayName, setOriginalDisplayName] = useState(user?.display_name || "");
-  const [originalStatus, setOriginalStatus] = useState(user?.custom_status || "");
+export default function SettingsTab() {
+  const auth = useAuth();
+  const user = auth?.user as any;
+  const logout = auth?.logout || (auth as any)?.signOut;
+  const updateUser = auth?.updateUser;
+
+  const [displayName, setDisplayName] = useState("");
+  const [customStatus, setCustomStatus] = useState("");
+  const [originalDisplayName, setOriginalDisplayName] = useState("");
+  const [originalStatus, setOriginalStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
 
-  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(() => {
-    const stored = localStorage.getItem("nexus_notification_prefs");
-    return stored
-      ? JSON.parse(stored)
-      : {
-          push: false,
-          messages: true,
-          jobs: true,
-          sound: true,
-          vibration: false,
-        };
+  const [notifPrefs, setNotifPrefs] = useState(() => {
+    try {
+      const stored = localStorage.getItem("nexus_notification_prefs");
+      return stored ? JSON.parse(stored) : { push: false, messages: true, jobs: true, sound: true, vibration: false };
+    } catch { return { push: false, messages: true, jobs: true, sound: true, vibration: false }; }
   });
 
-  const [appearancePrefs, setAppearancePrefs] = useState<AppearancePrefs>(() => {
-    const stored = localStorage.getItem("nexus_appearance_prefs");
-    return stored
-      ? JSON.parse(stored)
-      : {
-          theme: "cyber",
-          fontSize: "medium",
-          reducedMotion: false,
-        };
+  const [activeTheme, setActiveTheme] = useState(() => {
+    try {
+      const stored = localStorage.getItem("nexus_appearance_prefs");
+      return stored ? JSON.parse(stored).theme || "cyber" : "cyber";
+    } catch { return "cyber"; }
+  });
+  const [fontSize, setFontSize] = useState(() => {
+    try {
+      const stored = localStorage.getItem("nexus_appearance_prefs");
+      return stored ? JSON.parse(stored).fontSize || "medium" : "medium";
+    } catch { return "medium"; }
   });
 
-  const [showUserManagement, setShowUserManagement] = useState(false);
-  const [showIntegrations, setShowIntegrations] = useState(false);
-  const [showSystemLogs, setShowSystemLogs] = useState(false);
-  const [showTerminal, setShowTerminal] = useState(false);
-  const [showTerminalButton, setShowTerminalButton] = useState(false);
-
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const [tapCount, setTapCount] = useState(0);
   const [lastTap, setLastTap] = useState(0);
-  const longPressTimer = useRef<NodeJS.Timeout>();
-
-  const adminHeaderRef = useRef<HTMLDivElement>(null);
+  const [showTerminalBtn, setShowTerminalBtn] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalHistory, setTerminalHistory] = useState<Array<{ type: string; text: string }>>([]);
+  const [secretKey, setSecretKey] = useState("");
+  const [askingKey, setAskingKey] = useState(false);
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIdx, setHistoryIdx] = useState(-1);
+  const termInputRef = useRef<HTMLInputElement>(null);
+  const termOutputRef = useRef<HTMLDivElement>(null);
+  const longPressRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    setDisplayName(user?.display_name || "");
-    setCustomStatus(user?.custom_status || "");
-    setOriginalDisplayName(user?.display_name || "");
-    setOriginalStatus(user?.custom_status || "");
-  }, [user]);
-
-  useEffect(() => {
-    applyTheme(appearancePrefs.theme);
-  }, []);
-
-  const hasProfileChanges =
-    displayName !== originalDisplayName || customStatus !== originalStatus;
-
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must be less than 5MB");
-      return;
+    if (user) {
+      setDisplayName(user.display_name || "");
+      setCustomStatus(user.custom_status || "");
+      setOriginalDisplayName(user.display_name || "");
+      setOriginalStatus(user.custom_status || "");
     }
+    applyTheme(activeTheme);
+    applyFontSize(fontSize);
+  }, [user, activeTheme, fontSize]);
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Only JPG, PNG, and WebP images are allowed");
-      return;
-    }
+  if (!user) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#888899", fontFamily: "Inter, sans-serif" }}>
+        Loading settings...
+      </div>
+    );
+  }
 
-    setAvatarLoading(true);
-    try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `avatars/${user.id}.${ext}`;
+  const isAdmin = user.role === "admin";
+  const hasProfileChanges = displayName !== originalDisplayName || customStatus !== originalStatus;
 
-      const { error: removeError } = await supabase.storage
-        .from("nexus-files")
-        .remove([path]);
+  const applyTheme = (name: string) => {
+    const t = THEMES[name];
+    if (t) Object.entries(t).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+    setActiveTheme(name);
+    const prefs = { theme: name, fontSize };
+    localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
+  };
 
-      const { error: uploadError } = await supabase.storage
-        .from("nexus-files")
-        .upload(path, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("nexus-files")
-        .getPublicUrl(path);
-
-      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ avatar_url: avatarUrl })
-        .eq("id", user.id);
-
-      if (updateError) throw updateError;
-
-      updateUser({ ...user, avatar_url: avatarUrl });
-      toast.success("Avatar updated");
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to update avatar");
-    } finally {
-      setAvatarLoading(false);
-    }
+  const applyFontSize = (size: string) => {
+    const map: Record<string, string> = { small: "13px", medium: "14px", large: "16px" };
+    document.documentElement.style.setProperty("--font-size-base", map[size] || "14px");
+    setFontSize(size);
+    const prefs = { theme: activeTheme, fontSize: size };
+    localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
   };
 
   const handleSaveProfile = async () => {
-    if (!hasProfileChanges || !user) return;
-
+    if (!hasProfileChanges) return;
     setSaving(true);
     try {
-      const updates: Partial<ProfileUser> = {};
-
-      if (displayName.trim() !== originalDisplayName) {
-        if (displayName.trim().length < 2) {
-          toast.error("Display name must be at least 2 characters");
-          setSaving(false);
-          return;
-        }
-        if (!/^[a-zA-Z0-9_\s]+$/.test(displayName.trim())) {
-          toast.error("Display name can only contain letters, numbers, spaces, and underscores");
-          setSaving(false);
-          return;
-        }
-        updates.display_name = displayName.trim();
-      }
-
-      if (customStatus.trim() !== originalStatus) {
-        if (customStatus.length > 100) {
-          toast.error("Status must be less than 100 characters");
-          setSaving(false);
-          return;
-        }
-        updates.custom_status = customStatus.trim();
-      }
-
-      const { error } = await supabase
-        .from("profiles")
-        .update(updates)
-        .eq("id", user.id);
-
+      const updates: any = {};
+      if (displayName.trim() !== originalDisplayName) updates.display_name = displayName.trim();
+      if (customStatus.trim() !== originalStatus) updates.custom_status = customStatus.trim();
+      const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
       if (error) throw error;
-
-      updateUser({ ...user, ...updates });
-      setOriginalDisplayName(displayName);
-      setOriginalStatus(customStatus);
-      toast.success("Profile updated successfully");
-    } catch (err) {
-      toast.error((err as Error).message || "Failed to save profile");
-    } finally {
-      setSaving(false);
-    }
+      if (updateUser) updateUser({ ...user, ...updates });
+      setOriginalDisplayName(displayName.trim());
+      setOriginalStatus(customStatus.trim());
+      showToast("Profile updated successfully", "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to save profile", "error");
+    } finally { setSaving(false); }
   };
 
-  const updateNotifPref = (key: keyof NotificationPrefs, value: boolean) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast("Image must be under 5MB", "error"); return; }
+    setAvatarLoading(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const path = `avatars/${user.id}.${ext}`;
+      await supabase.storage.from("nexus-files").remove([path]);
+      const { error: upErr } = await supabase.storage.from("nexus-files").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("nexus-files").getPublicUrl(path);
+      const avatarUrl = urlData.publicUrl + "?t=" + Date.now();
+      const { error: dbErr } = await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", user.id);
+      if (dbErr) throw dbErr;
+      if (updateUser) updateUser({ ...user, avatar_url: avatarUrl });
+      showToast("Avatar updated", "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to upload avatar", "error");
+    } finally { setAvatarLoading(false); }
+  };
+
+  const updateNotifPref = (key: string, value: boolean) => {
     const updated = { ...notifPrefs, [key]: value };
     setNotifPrefs(updated);
     localStorage.setItem("nexus_notification_prefs", JSON.stringify(updated));
   };
 
   const handlePushToggle = async (enabled: boolean) => {
-    if (enabled) {
-      if (!("Notification" in window)) {
-        toast.error("Browser notifications not supported");
-        return;
-      }
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        updateNotifPref("push", true);
-        toast.success("Push notifications enabled");
-      } else {
-        toast.error("Notifications blocked by browser. Enable in browser settings.");
-      }
-    } else {
-      updateNotifPref("push", false);
-      toast.info("Push notifications disabled");
+    if (enabled && "Notification" in window) {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { showToast("Notifications blocked by browser", "error"); return; }
     }
+    updateNotifPref("push", enabled);
+    showToast(enabled ? "Push notifications enabled" : "Push notifications disabled", "success");
   };
 
-  const handleSoundToggle = (enabled: boolean) => {
-    updateNotifPref("sound", enabled);
-    if (enabled) {
-      try {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 800;
-        gain.gain.value = 0.1;
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-      } catch {
-        toast.info("Audio preview not available");
-      }
-    }
-  };
-
-  const handleVibrationToggle = (enabled: boolean) => {
-    updateNotifPref("vibration", enabled);
-    if (enabled && navigator.vibrate) {
-      navigator.vibrate(200);
-    }
-  };
-
-  const applyTheme = (themeName: string) => {
-    const theme = THEMES[themeName as keyof typeof THEMES];
-    if (!theme) return;
-
-    document.documentElement.style.setProperty("--bg-primary", theme.bgPrimary);
-    document.documentElement.style.setProperty("--bg-secondary", theme.bgSecondary);
-    document.documentElement.style.setProperty("--accent-primary", theme.accentPrimary);
-    document.documentElement.style.setProperty("--accent-secondary", theme.accentSecondary);
-
-    document.documentElement.style.setProperty(
-      "--background",
-      themeName === "cyber"
-        ? "240 33% 4%"
-        : themeName === "midnight"
-        ? "214 27% 8%"
-        : "261 28% 7%"
-    );
-    document.documentElement.style.setProperty(
-      "--primary",
-      themeName === "cyber"
-        ? "153 100% 50%"
-        : themeName === "midnight"
-        ? "212 100% 67%"
-        : "263 70% 71%"
-    );
-  };
-
-  const handleThemeChange = (themeName: string) => {
-    applyTheme(themeName);
-    const prefs = { ...appearancePrefs, theme: themeName };
-    setAppearancePrefs(prefs);
-    localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
-    toast.success(`Theme changed to ${THEMES[themeName as keyof typeof THEMES].name}`);
-  };
-
-  const handleFontSizeChange = (size: string) => {
-    const fontSize = FONT_SIZES[size as keyof typeof FONT_SIZES];
-    document.documentElement.style.setProperty("--font-size-base", fontSize);
-    const prefs = { ...appearancePrefs, fontSize: size };
-    setAppearancePrefs(prefs);
-    localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
-  };
-
-  const handleReducedMotionToggle = (enabled: boolean) => {
-    document.documentElement.style.setProperty(
-      "--transition-speed",
-      enabled ? "0s" : "200ms"
-    );
-    document.body.classList.toggle("reduce-motion", enabled);
-    const prefs = { ...appearancePrefs, reducedMotion: enabled };
-    setAppearancePrefs(prefs);
-    localStorage.setItem("nexus_appearance_prefs", JSON.stringify(prefs));
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) { showToast("Passwords don't match", "error"); return; }
+    if (newPassword.length < 8) { showToast("Password must be at least 8 characters", "error"); return; }
+    setPasswordLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      showToast("Password updated", "success");
+      setShowPasswordModal(false);
+      setNewPassword(""); setConfirmPassword("");
+    } catch (err: any) {
+      showToast(err.message || "Failed to update password", "error");
+    } finally { setPasswordLoading(false); }
   };
 
   const handleLogout = async () => {
-    setLogoutLoading(true);
     try {
-      if (user) {
-        await supabase
-          .from("profiles")
-          .update({ is_online: false, last_seen: new Date().toISOString() })
-          .eq("id", user.id);
-      }
-
+      await supabase.from("profiles").update({ is_online: false, last_seen: new Date().toISOString() }).eq("id", user.id);
       await supabase.auth.signOut();
-
-      Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith("nexus_")) localStorage.removeItem(key);
-      });
+      Object.keys(localStorage).forEach(k => { if (k.startsWith("nexus_")) localStorage.removeItem(k); });
       sessionStorage.clear();
-
-      logout();
-      navigate("/login");
+      if (logout) logout();
     } catch {
       await supabase.auth.signOut();
-      logout();
-      navigate("/login");
-    } finally {
-      setLogoutLoading(false);
+      if (logout) logout();
     }
   };
 
-  const handleAdminHeaderTap = () => {
+  const handleAdminTap = () => {
     const now = Date.now();
-    if (now - lastTap < 500) {
-      setTapCount((prev) => prev + 1);
-    } else {
-      setTapCount(1);
-    }
+    const newCount = (now - lastTap < 500) ? tapCount + 1 : 1;
+    setTapCount(newCount);
     setLastTap(now);
   };
 
-  const handleAdminHeaderLongPressStart = useCallback(() => {
+  const handleLongPressStart = () => {
     if (tapCount >= 3) {
-      longPressTimer.current = setTimeout(() => {
-        setShowTerminalButton(true);
+      longPressRef.current = setTimeout(() => {
+        setShowTerminalBtn(true);
         if (navigator.vibrate) navigator.vibrate(100);
-        toast.success("Terminal unlocked", { icon: "🔓" });
+        showToast("Terminal unlocked", "success");
       }, 2000);
     }
-  }, [tapCount]);
+  };
 
-  const handleAdminHeaderLongPressEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
+  const handleLongPressEnd = () => { if (longPressRef.current) clearTimeout(longPressRef.current); };
+
+  const openTerminal = () => {
+    const stored = sessionStorage.getItem("nexus_secret_key");
+    if (stored) { setSecretKey(stored); setTerminalOpen(true); }
+    else { setAskingKey(true); }
+  };
+
+  const submitSecretKey = () => {
+    if (secretKey.trim()) {
+      sessionStorage.setItem("nexus_secret_key", secretKey.trim());
+      setAskingKey(false);
+      setTerminalOpen(true);
     }
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+  const executeTerminalCmd = async (cmd: string) => {
+    if (cmd) setTerminalHistory(prev => [...prev, { type: "input", text: `> ${cmd}` }]);
+    if (cmd) setCommandHistory(prev => [cmd, ...prev]);
+    try {
+      const API = import.meta.env.VITE_API_URL || "https://Nexus-chat-app-nexus-chat.hf.space";
+      const res = await fetch(`${API}/api/secret`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Secret-Key": secretKey },
+        body: JSON.stringify({ command: cmd.split(" ")[0] || null, args: cmd.split(" ").slice(1) }),
+      });
+      const data = await res.json();
+      setTerminalHistory(prev => [...prev, { type: "output", text: data.data?.output || data.error || "No response" }]);
+    } catch (err: any) {
+      setTerminalHistory(prev => [...prev, { type: "output", text: `Error: ${err.message}` }]);
+    }
+    setTimeout(() => termOutputRef.current?.scrollTo(0, termOutputRef.current.scrollHeight), 50);
   };
 
+  const handleTerminalKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const v = (e.target as HTMLInputElement).value.trim();
+      if (v === "clear") setTerminalHistory([]);
+      else if (v === "exit") setTerminalOpen(false);
+      else if (v) executeTerminalCmd(v);
+      (e.target as HTMLInputElement).value = "";
+      setHistoryIdx(-1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (historyIdx < commandHistory.length - 1) {
+        const i = historyIdx + 1; setHistoryIdx(i);
+        (e.target as HTMLInputElement).value = commandHistory[i];
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIdx > 0) { const i = historyIdx - 1; setHistoryIdx(i); (e.target as HTMLInputElement).value = commandHistory[i]; }
+      else { setHistoryIdx(-1); (e.target as HTMLInputElement).value = ""; }
+    } else if (e.key === "Escape") { setTerminalOpen(false); }
+  };
+
+  const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
+
+  const sectionStyle: React.CSSProperties = { marginBottom: 32, padding: "0 16px" };
+  const headerStyle: React.CSSProperties = { fontSize: 16, fontWeight: 700, color: "#e0e0e0", marginBottom: 16, display: "flex", alignItems: "center", gap: 8, fontFamily: "JetBrains Mono, monospace" };
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "12px 16px", background: "#12121a", border: "1px solid rgba(0,255,136,0.15)", borderRadius: 12, color: "#e0e0e0", fontSize: 14, outline: "none", fontFamily: "Inter, sans-serif", boxSizing: "border-box" as const };
+  const btnPrimary: React.CSSProperties = { width: "100%", padding: "14px", background: "linear-gradient(135deg, #00ff88, #0ea5e9)", color: "#0a0a0f", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1, textTransform: "uppercase" as const };
+  const btnOutline: React.CSSProperties = { width: "100%", padding: "14px", background: "transparent", border: "1px solid rgba(0,255,136,0.3)", borderRadius: 12, color: "#00ff88", fontSize: 14, fontWeight: 600, cursor: "pointer" };
+  const toggleRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" };
+  const divider: React.CSSProperties = { height: 1, background: "rgba(0,255,136,0.08)", margin: "24px 0" };
+  const modalOverlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9998, padding: 16 };
+  const modalBox: React.CSSProperties = { background: "#12121a", borderRadius: 16, padding: 24, maxWidth: 400, width: "100%", border: "1px solid rgba(0,255,136,0.1)" };
+
   return (
-    <>
-      <div className="flex h-full flex-col overflow-y-auto pb-20">
-        <div className="px-4 pt-4 pb-3">
-          <h2 className="font-display text-lg font-bold text-foreground">Settings</h2>
-        </div>
+    <div style={{ height: "100%", overflowY: "auto", paddingTop: 16, paddingBottom: 100, fontFamily: "Inter, sans-serif" }}>
 
-        <div className="space-y-1">
-          <SectionHeader icon={User} label="Profile" />
+      {/* PROFILE */}
+      <div style={sectionStyle}>
+        <div style={headerStyle}>Profile</div>
 
-          <div className="px-4 py-4 space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleAvatarChange}
-                  className="hidden"
-                  id="avatar-upload"
-                />
-                <label
-                  htmlFor="avatar-upload"
-                  className={`relative flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-full ${
-                    avatarLoading ? "opacity-50" : ""
-                  }`}
-                >
-                  {user?.avatar_url ? (
-                    <img
-                      src={user.avatar_url}
-                      alt={user.display_name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary to-secondary font-display text-xl font-bold text-primary-foreground">
-                      {getInitials(user?.display_name || user?.username || "?")}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 transition-opacity">
-                    <Camera className="h-6 w-6 text-white" />
-                  </div>
-                  {avatarLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                      <Loader2 className="h-6 w-6 animate-spin text-white" />
-                    </div>
-                  )}
-                </label>
-              </div>
-              <div>
-                <p className="font-body text-sm text-muted-foreground">
-                  Tap to change avatar
-                </p>
-                <p className="font-body text-xs text-muted-foreground/60 mt-1">
-                  JPG, PNG, WebP up to 5MB
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Display Name
-              </label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-                placeholder="Your display name"
-              />
-              <div className="mt-1 flex justify-end">
-                <span className="text-xs text-muted-foreground">
-                  {displayName.length}/50
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Username
-              </label>
-              <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                <Lock className="h-3 w-3" />
-                <span>@{user?.username}</span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground/60" title="Username cannot be changed. Contact admin.">
-                Username cannot be changed
-              </p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Custom Status
-              </label>
-              <input
-                type="text"
-                value={customStatus}
-                onChange={(e) => setCustomStatus(e.target.value.slice(0, 100))}
-                className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-                placeholder="What's on your mind?"
-              />
-              <div className="mt-1 flex justify-end">
-                <span className="text-xs text-muted-foreground">
-                  {customStatus.length}/100
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground/60">
-                e.g. "Working on project" or "Available for calls"
-              </p>
-            </div>
-
-            <button
-              onClick={handleSaveProfile}
-              disabled={!hasProfileChanges || saving}
-              className="w-full rounded-xl bg-gradient-to-r from-primary to-secondary py-2.5 font-display text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </span>
-              ) : (
-                "Save Changes"
-              )}
-            </button>
-          </div>
-
-          <div className="border-t border-border/50" />
-
-          <SectionHeader icon={Bell} label="Notifications" />
-
-          <div className="px-4 py-3 space-y-1">
-            <ToggleRow
-              label="Push Notifications"
-              description="Receive browser push notifications"
-              checked={notifPrefs.push}
-              onChange={handlePushToggle}
-            />
-            <ToggleRow
-              label="Message Notifications"
-              description="Show toasts for new messages"
-              checked={notifPrefs.messages}
-              onChange={(v) => updateNotifPref("messages", v)}
-            />
-            <ToggleRow
-              label="Job Notifications"
-              description="Show toasts for new jobs"
-              checked={notifPrefs.jobs}
-              onChange={(v) => updateNotifPref("jobs", v)}
-            />
-            <ToggleRow
-              label="Notification Sound"
-              description="Play sound on notifications"
-              checked={notifPrefs.sound}
-              onChange={handleSoundToggle}
-            />
-            <ToggleRow
-              label="Vibration"
-              description="Vibrate on notifications (mobile)"
-              checked={notifPrefs.vibration}
-              onChange={handleVibrationToggle}
-            />
-          </div>
-
-          <div className="border-t border-border/50" />
-
-          <SectionHeader icon={Palette} label="Appearance" />
-
-          <div className="px-4 py-4 space-y-4">
-            <div>
-              <label className="mb-2 block text-xs font-medium text-muted-foreground">
-                Theme
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                {Object.entries(THEMES).map(([key, theme]) => (
-                  <button
-                    key={key}
-                    onClick={() => handleThemeChange(key)}
-                    className={`relative rounded-lg p-3 transition-all ${
-                      appearancePrefs.theme === key
-                        ? "ring-2 ring-primary glow"
-                        : "border border-border hover:border-primary/30"
-                    }`}
-                  >
-                    <div
-                      className="h-8 rounded mb-2"
-                      style={{ backgroundColor: theme.bgPrimary }}
-                    >
-                      <div className="flex">
-                        <div
-                          className="w-1/2 rounded-l"
-                          style={{ backgroundColor: theme.accentPrimary }}
-                        />
-                        <div
-                          className="w-1/2 rounded-r"
-                          style={{ backgroundColor: theme.accentSecondary }}
-                        />
-                      </div>
-                    </div>
-                    <span className="block text-xs font-medium text-foreground">
-                      {theme.name}
-                    </span>
-                    {appearancePrefs.theme === key && (
-                      <div className="absolute right-1 top-1">
-                        <svg className="h-4 w-4 text-primary" fill="currentColor" viewBox="0 0 12 12">
-                          <path d="M4.5 8L2 5.5L3 4.5L4.5 6L8.5 2L9.5 3L4.5 8Z" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-xs font-medium text-muted-foreground">
-                Font Size
-              </label>
-              <div className="flex rounded-lg border border-border overflow-hidden">
-                {Object.entries(FONT_SIZES).map(([key, size]) => (
-                  <button
-                    key={key}
-                    onClick={() => handleFontSizeChange(key)}
-                    className={`flex-1 py-2 text-xs font-medium transition-all ${
-                      appearancePrefs.fontSize === key
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted/30 text-foreground hover:bg-muted/50"
-                    } ${key !== "small" ? "border-l border-border" : ""}`}
-                  >
-                    {key.charAt(0).toUpperCase() + key.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <ToggleRow
-              label="Reduced Animations"
-              description="Minimize motion effects"
-              checked={appearancePrefs.reducedMotion}
-              onChange={handleReducedMotionToggle}
-            />
-          </div>
-
-          {user?.role === "admin" && (
-            <>
-              <div className="border-t border-border/50" />
-
-              <div
-                className="border-l-4 border-primary pl-0"
-                ref={adminHeaderRef}
-                onTouchStart={handleAdminHeaderLongPressStart}
-                onTouchEnd={handleAdminHeaderLongPressEnd}
-                onMouseDown={handleAdminHeaderLongPressStart}
-                onMouseUp={handleAdminHeaderLongPressEnd}
-                onMouseLeave={handleAdminHeaderLongPressEnd}
-              >
-                <SectionHeader icon={Shield} label="Admin Panel" />
-              </div>
-
-              <div className="px-4 py-2 space-y-1">
-                <ActionRow
-                  label="Manage Users"
-                  onClick={() => setShowUserManagement(true)}
-                />
-                <ActionRow
-                  label="Integrations"
-                  onClick={() => setShowIntegrations(true)}
-                />
-                <ActionRow
-                  label="System Logs"
-                  onClick={() => setShowSystemLogs(true)}
-                />
-              </div>
-
-              {showTerminalButton && (
-                <div className="px-4 pb-2 animate-slide-up">
-                  <button
-                    onClick={() => setShowTerminal(true)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/50 py-2.5 font-display text-sm font-medium text-primary transition-all hover:bg-primary/10 active:scale-[0.98] animate-pulse"
-                    style={{ boxShadow: "0 0 20px rgba(0, 255, 136, 0.3)" }}
-                  >
-                    <Terminal className="h-4 w-4" />
-                    Open Terminal
-                  </button>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <label style={{ cursor: "pointer", position: "relative" }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: 40,
+              background: user.avatar_url ? `url(${user.avatar_url}) center/cover` : "linear-gradient(135deg, #00ff88, #0ea5e9)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 28, fontWeight: 700, color: "#0a0a0f", border: "2px solid rgba(0,255,136,0.3)",
+              fontFamily: "JetBrains Mono, monospace",
+            }}>
+              {!user.avatar_url && getInitials(user.display_name || user.username || "?")}
+              {avatarLoading && (
+                <div style={{ position: "absolute", inset: 0, borderRadius: 40, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", color: "#00ff88" }}>
+                  ...
                 </div>
               )}
-            </>
-          )}
-
-          <div className="border-t border-border/50" />
-
-          <SectionHeader icon={Info} label="About" />
-
-          <div className="px-4 py-4 space-y-3">
-            <div className="text-center">
-              <h3 className="font-display text-2xl font-bold text-primary glow-text">
-                NEXUS
-              </h3>
-              <p className="font-body text-sm text-muted-foreground">v1.0.0</p>
-              <p className="font-body text-xs text-muted-foreground mt-1">
-                Private Team Communication Platform
-              </p>
             </div>
+            <div style={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderRadius: 12, background: "#00ff88", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
+              📷
+            </div>
+            <input type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: "none" }} />
+          </label>
+        </div>
 
-            <div className="border-t border-border/50 pt-3 space-y-2">
-              <button className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-foreground transition-all hover:bg-muted/50">
-                Report Bug
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: "#888899", marginBottom: 4, display: "block" }}>Display Name</label>
+          <input style={inputStyle} value={displayName} onChange={e => setDisplayName(e.target.value.slice(0, 50))} placeholder="Your display name" />
+          <div style={{ fontSize: 11, color: "#888899", textAlign: "right", marginTop: 2 }}>{displayName.length}/50</div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, color: "#888899", marginBottom: 4, display: "block" }}>Username 🔒</label>
+          <input style={{ ...inputStyle, opacity: 0.5, cursor: "not-allowed" }} value={user.username || ""} readOnly />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: "#888899", marginBottom: 4, display: "block" }}>Status</label>
+          <input style={inputStyle} value={customStatus} onChange={e => setCustomStatus(e.target.value.slice(0, 100))} placeholder="What's on your mind?" />
+          <div style={{ fontSize: 11, color: "#888899", textAlign: "right", marginTop: 2 }}>{customStatus.length}/100</div>
+        </div>
+
+        <button
+          style={{ ...btnPrimary, opacity: hasProfileChanges && !saving ? 1 : 0.4, pointerEvents: hasProfileChanges && !saving ? "auto" : "none" }}
+          onClick={handleSaveProfile}
+        >
+          {saving ? "Saving..." : "Save Changes"}
+        </button>
+      </div>
+
+      <div style={divider} />
+
+      {/* NOTIFICATIONS */}
+      <div style={sectionStyle}>
+        <div style={headerStyle}>Notifications</div>
+        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Push Notifications</span><Toggle checked={notifPrefs.push} onChange={handlePushToggle} /></div>
+        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Message Notifications</span><Toggle checked={notifPrefs.messages} onChange={v => updateNotifPref("messages", v)} /></div>
+        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Job Notifications</span><Toggle checked={notifPrefs.jobs} onChange={v => updateNotifPref("jobs", v)} /></div>
+        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Sound</span><Toggle checked={notifPrefs.sound} onChange={v => { updateNotifPref("sound", v); if (v) { try { const c = new AudioContext(); const o = c.createOscillator(); const g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 800; g.gain.value = 0.1; o.start(); o.stop(c.currentTime + 0.15); } catch {} } }} /></div>
+        <div style={toggleRow}><span style={{ color: "#e0e0e0" }}>Vibration</span><Toggle checked={notifPrefs.vibration} onChange={v => { updateNotifPref("vibration", v); if (v && navigator.vibrate) navigator.vibrate(200); }} /></div>
+      </div>
+
+      <div style={divider} />
+
+      {/* APPEARANCE */}
+      <div style={sectionStyle}>
+        <div style={headerStyle}>Appearance</div>
+
+        <label style={{ fontSize: 12, color: "#888899", marginBottom: 8, display: "block" }}>Theme</label>
+        <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+          {Object.entries(THEMES).map(([name, vars]) => (
+            <div key={name} onClick={() => applyTheme(name)} style={{
+              flex: 1, height: 60, borderRadius: 12, background: vars["--bg-primary"], border: `2px solid ${activeTheme === name ? vars["--accent-primary"] : "rgba(255,255,255,0.1)"}`,
+              cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, transition: "border 0.2s",
+              boxShadow: activeTheme === name ? `0 0 12px ${vars["--accent-primary"]}33` : "none",
+            }}>
+              <div style={{ width: 16, height: 16, borderRadius: 8, background: vars["--accent-primary"] }} />
+              <span style={{ fontSize: 10, color: "#e0e0e0", textTransform: "capitalize" }}>{name}</span>
+              {activeTheme === name && <span style={{ fontSize: 8, color: vars["--accent-primary"] }}>✓</span>}
+            </div>
+          ))}
+        </div>
+
+        <label style={{ fontSize: 12, color: "#888899", marginBottom: 8, display: "block" }}>Font Size</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          {(["small", "medium", "large"] as const).map(size => (
+            <button key={size} onClick={() => applyFontSize(size)} style={{
+              flex: 1, padding: "10px", borderRadius: 10, border: `1px solid ${fontSize === size ? "#00ff88" : "rgba(255,255,255,0.1)"}`,
+              background: fontSize === size ? "#00ff8822" : "transparent", color: fontSize === size ? "#00ff88" : "#888899",
+              cursor: "pointer", fontSize: 12, textTransform: "capitalize",
+            }}>{size}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={divider} />
+
+      {/* SECURITY */}
+      <div style={sectionStyle}>
+        <div style={headerStyle}>Security</div>
+        <button style={btnOutline} onClick={() => setShowPasswordModal(true)}>Change Password</button>
+      </div>
+
+      {isAdmin && (
+        <>
+          <div style={divider} />
+          <div style={{ ...sectionStyle, borderLeft: "3px solid #00ff88", paddingLeft: 20 }}>
+            <div
+              style={headerStyle}
+              onClick={handleAdminTap}
+              onMouseDown={handleLongPressStart}
+              onMouseUp={handleLongPressEnd}
+              onMouseLeave={handleLongPressEnd}
+              onTouchStart={handleLongPressStart}
+              onTouchEnd={handleLongPressEnd}
+            >
+              Admin Panel
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button style={btnOutline} onClick={() => showToast("User management coming soon", "info")}>Manage Users →</button>
+              <button style={btnOutline} onClick={() => showToast("Integrations coming soon", "info")}>Integrations →</button>
+              <button style={btnOutline} onClick={() => showToast("Logs coming soon", "info")}>View Logs →</button>
+              {showTerminalBtn && (
+                <button
+                  style={{ ...btnOutline, borderColor: "#00ff88", animation: "pulse 2s infinite" }}
+                  onClick={openTerminal}
+                >
+                  Open Terminal
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div style={divider} />
+
+      {/* ABOUT */}
+      <div style={sectionStyle}>
+        <div style={headerStyle}>About</div>
+        <div style={{ color: "#00ff88", fontSize: 18, fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>NEXUS</div>
+        <div style={{ color: "#888899", fontSize: 12, marginTop: 4 }}>v1.0.0</div>
+        <div style={{ color: "#888899", fontSize: 12, marginTop: 2 }}>Private Team Communication Platform</div>
+        <div style={{ color: "#888899", fontSize: 12, marginTop: 8 }}>Built with care by the team</div>
+      </div>
+
+      <div style={divider} />
+
+      {/* LOGOUT */}
+      <div style={{ ...sectionStyle, marginBottom: 40 }}>
+        <button onClick={() => setShowLogoutConfirm(true)} style={{ ...btnOutline, borderColor: "#ff3366", color: "#ff3366" }}>
+          Disconnect
+        </button>
+      </div>
+
+      {/* PASSWORD MODAL */}
+      {showPasswordModal && (
+        <div style={modalOverlay} onClick={() => setShowPasswordModal(false)}>
+          <div style={modalBox} onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: "#e0e0e0", marginTop: 0, marginBottom: 16 }}>Change Password</h3>
+            <input style={{ ...inputStyle, marginBottom: 12 }} type="password" placeholder="New password (min 8 chars)" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+            <input style={{ ...inputStyle, marginBottom: 16 }} type="password" placeholder="Confirm new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...btnOutline, flex: 1 }} onClick={() => setShowPasswordModal(false)}>Cancel</button>
+              <button style={{ ...btnPrimary, flex: 1, opacity: newPassword.length >= 8 && newPassword === confirmPassword ? 1 : 0.4 }} onClick={handleChangePassword} disabled={passwordLoading}>
+                {passwordLoading ? "Updating..." : "Update"}
               </button>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="px-4 pb-8 pt-4">
-          <button
-            onClick={() => setShowLogoutConfirm(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive py-3 font-display text-sm font-semibold text-destructive transition-all hover:bg-destructive/10 active:scale-[0.98]"
-          >
-            <LogOut className="h-4 w-4" />
-            Disconnect
-          </button>
+      {/* LOGOUT CONFIRM */}
+      {showLogoutConfirm && (
+        <div style={modalOverlay} onClick={() => setShowLogoutConfirm(false)}>
+          <div style={modalBox} onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: "#e0e0e0", marginTop: 0 }}>Disconnect from NEXUS?</h3>
+            <p style={{ color: "#888899", fontSize: 14 }}>You will need to log in again to access your chats.</p>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button style={{ ...btnOutline, flex: 1 }} onClick={() => setShowLogoutConfirm(false)}>Cancel</button>
+              <button style={{ ...btnOutline, flex: 1, borderColor: "#ff3366", color: "#ff3366" }} onClick={handleLogout}>Disconnect</button>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {showUserManagement && (
-        <UserManagementModal
-          open={showUserManagement}
-          onClose={() => setShowUserManagement(false)}
-        />
       )}
 
-      {showIntegrations && (
-        <IntegrationCards
-          open={showIntegrations}
-          onClose={() => setShowIntegrations(false)}
-        />
+      {/* SECRET KEY PROMPT */}
+      {askingKey && (
+        <div style={modalOverlay} onClick={() => setAskingKey(false)}>
+          <div style={modalBox} onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: "#00ff88", marginTop: 0, fontFamily: "monospace" }}>Enter Secret Key</h3>
+            <input
+              style={{ ...inputStyle, marginBottom: 16, fontFamily: "monospace" }}
+              type="password"
+              placeholder="nx_secret_..."
+              value={secretKey}
+              onChange={e => setSecretKey(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && submitSecretKey()}
+              autoFocus
+            />
+            <button style={btnPrimary} onClick={submitSecretKey}>Access Terminal</button>
+          </div>
+        </div>
       )}
 
-      {showSystemLogs && (
-        <SystemLogs
-          open={showSystemLogs}
-          onClose={() => setShowSystemLogs(false)}
-        />
+      {/* TERMINAL */}
+      {terminalOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999, display: "flex", flexDirection: "column", fontFamily: "JetBrains Mono, Courier New, monospace" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", borderBottom: "1px solid #00ff8833" }}>
+            <span style={{ color: "#00ff88", fontSize: 12 }}>NEXUS TERMINAL</span>
+            <button onClick={() => setTerminalOpen(false)} style={{ background: "none", border: "none", color: "#ff3366", fontSize: 18, cursor: "pointer" }}>✕</button>
+          </div>
+          <div ref={termOutputRef} style={{ flex: 1, overflowY: "auto", padding: 16, fontSize: 13, lineHeight: 1.6 }}>
+            {terminalHistory.map((h, i) => (
+              <div key={i} style={{ color: h.type === "input" ? "#0ea5e9" : "#00ff88", whiteSpace: "pre-wrap" as const, wordBreak: "break-word" as const, marginBottom: 4 }}>{h.text}</div>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", padding: "8px 16px", borderTop: "1px solid #00ff8833" }}>
+            <span style={{ color: "#00ff88", marginRight: 8 }}>&gt;</span>
+            <input
+              ref={termInputRef}
+              onKeyDown={handleTerminalKey}
+              autoFocus
+              style={{ flex: 1, background: "none", border: "none", color: "#00ff88", fontSize: 14, outline: "none", fontFamily: "inherit", caretColor: "#00ff88" }}
+              placeholder="Type a command..."
+            />
+          </div>
+        </div>
       )}
 
-      {showTerminal && (
-        <AdminTerminal
-          open={showTerminal}
-          onClose={() => setShowTerminal(false)}
-        />
-      )}
-
-      <ConfirmDialog
-        open={showLogoutConfirm}
-        onClose={() => setShowLogoutConfirm(false)}
-        onConfirm={handleLogout}
-        title="Disconnect from NEXUS?"
-        message="You will need to log in again to access your chats."
-        confirmText="Disconnect"
-        confirmColor="destructive"
-        loading={logoutLoading}
-      />
-    </>
-  );
-};
-
-const SectionHeader = ({ icon: Icon, label }: { icon: typeof User; label: string }) => (
-  <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-    <Icon className="h-4 w-4 text-primary" />
-    <span className="font-display text-xs uppercase tracking-wider text-primary">{label}</span>
-  </div>
-);
-
-const ToggleRow = ({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) => (
-  <div className="flex items-center justify-between py-3">
-    <div>
-      <p className="font-body text-sm text-foreground">{label}</p>
-      {description && (
-        <p className="font-body text-xs text-muted-foreground">{description}</p>
-      )}
+      <style>{"@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }"}</style>
     </div>
-    <ToggleSwitch checked={checked} onChange={onChange} />
-  </div>
-);
-
-const ActionRow = ({ label, onClick }: { label: string; onClick: () => void }) => (
-  <button
-    onClick={onClick}
-    className="flex w-full items-center justify-between py-3 text-left transition-all hover:bg-muted/30 active:scale-[0.99]"
-  >
-    <span className="font-body text-sm text-foreground">{label}</span>
-    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-  </button>
-);
-
-export default SettingsTab;
+  );
+}
